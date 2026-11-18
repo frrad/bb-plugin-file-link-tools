@@ -27,7 +27,7 @@ export const rpcContract = defineRpcContract({
 });
 
 export default function plugin(bb: BbPluginApi) {
-  bb.settings.define({ replaceDefaultClick: { type: "boolean", label: "Use configured file-link actions", description: "When disabled, BB handles clicks. Rules below remain saved.", default: true } });
+  bb.settings.define({ replaceDefaultClick: { type: "boolean", label: "Use link rules", description: "Apply web and file rules on normal clicks. Turn off to keep BB’s normal clicks; saved rules remain.", default: true } });
   async function configuration() {
     const stored = await bb.storage.kv.get<unknown>("configuration");
     return stored === undefined ? structuredClone(defaultConfiguration) : configurationSchema.parse(stored);

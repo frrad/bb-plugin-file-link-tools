@@ -1,23 +1,29 @@
 # Reference
 
-Link Rules is derived from [File Link Tools](https://github.com/linniksa/bb-plugin-file-link-tools). It retains extension rules, custom commands, configuration synchronization, locale selection, file verification and click actions. It removes all hover cards, inline previews, summary enumeration, link decoration and long-press handling.
+Link Rules derives from [File Link Tools](https://github.com/linniksa/bb-plugin-file-link-tools). It retains file extension rules, custom commands, configuration synchronization, file verification and click actions. It adds web URL rules and a web-link menu. Preview cards, inline previews, summary enumeration, link decoration and long-press handling are removed.
 
-## File actions
+## Web behavior
 
-Settings → Link Rules chooses the default action, extension rules and custom tools. Disabling **Use configured file-link actions** preserves BB's native click behavior. Folders always use the file manager. Extensions match without case sensitivity; each extension has one rule. Configuration is validated server-side, stored in BB's plugin KV store and synchronized through realtime events. Concurrent saves use the last saved configuration; the editor warns about intervening changes.
+The app-wide overlay handles external HTTP(S) anchors on the viewing client. First matching pattern wins; otherwise `webDefault` applies. `bb` delegates to the anchor's existing BB handler. `external` uses the viewing desktop's `bbDesktop.openExternalUrl`, or a normal new browser tab on web clients. It never asks the server to launch a browser. There is no public SDK method to force the main browser: the isolated desktop bridge call in `web-opening.ts` is a feature-checked compatibility dependency, to revalidate after BB upgrades.
 
-**Preview in BB** opens BB's own side panel on click, preserving line and range locations. There is no plugin preview card or file-content read. **Default application** invokes BB's host daemon with `targetId: "default-app"`; this internal route must be revalidated after BB upgrades. File operations require a thread on the primary host. This fork has a separate plugin ID and does not migrate upstream's saved settings.
+The menu uses app DOM rather than Electron's native menu because BB exposes no public web-link menu contribution slot. It supports arrow keys, Home/End, Enter, Escape, outside click, focus restoration and viewport clamping. Copy uses BB's SDK clipboard API. Select all selects the main content containing the link. Shift-right-click keeps the native menu. Change default opens the plugin's own settings panel through SDK navigation and carries the URL in per-tab session storage. Normal modified clicks are left alone.
 
-Custom tools use a single-line command with `{path}`, `{line}`, and `{column}`. Arguments are split before substitution without shell expansion. A range uses its starting line; absent line and column default to 1. Windows scripts require an explicit interpreter. The server launches only saved tool IDs and rechecks the target before launching. Commands return after process startup, not GUI application exit.
+Web matching uses RE2JS, with linear-time matching and bounded pattern/URL sizes. Patterns are case insensitive; unsupported constructs produce validation errors. BB's origin, internal routes, relative/fragment links, downloads, credential-bearing URLs and other schemes are excluded. An embedded browser page is a separate document and is not intercepted.
 
-Only verified `file://` anchors in a thread's timeline receive click overrides. Each visible target is checked once per mounted view; external opening rechecks existence. Unverified links retain BB handling. Modified clicks and context menus are untouched. Listeners and observers are disposed on unmount. The timeline attributes used to identify links are a DOM compatibility dependency.
+Examples store an HTTP(S) URL, desired action and narrative. They are acceptance checks, not an AI rule generator. Applying an example builds an escaped exact-hostname rule, inserts it first, and replaces an existing identical pattern. Narratives remain editable context for people and agents. Up to 50 web rules and 30 examples are accepted. Old file-only configurations gain the initial Slack rule and examples through schema defaults; existing file choices are preserved.
 
-## Attribution
+## File behavior
 
-File revealing in `reveal-file.ts` is adapted from [reveal-file 0.1.2](https://github.com/sindresorhus/reveal-file) under [its MIT license](../LICENSE.reveal-file). Windows and Linux GUI execution has not been verified here; WSL is unsupported.
+The file enable switch also controls web click overrides. Disabling it retains normal BB clicks, with the one-off web menu still available. File extensions match case insensitively and override the default. Preview opens BB's side panel only on click, preserving line/range locations. Default application uses BB's host daemon `targetId: "default-app"`; this internal route is inherited and must be revalidated after BB upgrades. File operations require a thread on the primary host.
 
-Button and Tooltip source comes from the [BB 0.47.1 registry](https://github.com/get-bb/bb/tree/desktop-v0.47.1/packages/plugin-registry/r), under [BB's license](../LICENSE.BB). These components are used only in settings.
+Custom tools accept `{path}`, `{line}` and `{column}`; arguments are split before substitution without shell expansion. A range uses its start; absent line/column default to 1. Windows scripts need an explicit interpreter. The server launches only saved tool IDs and rechecks target existence. Commands return after startup, not GUI application exit.
 
-## Development
+Visible `file://` targets are checked once per mounted view. Unknown or unverified files retain BB's handler. Observers and click listeners are disposed on unmount. File interception depends on BB's timeline attributes and its compatibility-supported thread header slot. Web interception uses the current app-overlay slot.
 
-Run `npm ci`, `npm run check`, `npm test`, and `bb plugin build`. Reload an installed local copy with `bb plugin reload link-rules`.
+Configuration is validated server-side, stored in plugin KV, and synchronized through realtime events. Concurrent saves are last-write-wins; the editor warns about intervening changes. There is no settings migration from upstream's separate plugin ID.
+
+## Attribution and validation
+
+File revealing is adapted from [reveal-file 0.1.2](https://github.com/sindresorhus/reveal-file), under [its MIT license](../LICENSE.reveal-file). Windows/Linux GUI file execution has not been verified here; WSL is unsupported. Retained Button and Tooltip vendored source is under [BB's license](../LICENSE.BB).
+
+Run `npm ci`, `npm run check`, `npm test`, and `bb plugin build`. Tests cover schema migration, regex precedence and validation, hostname escaping, click modifiers, menu behavior and cleanup, one-off BB opening, and example editing/saving. Reload a local installation with `bb plugin reload link-rules`.

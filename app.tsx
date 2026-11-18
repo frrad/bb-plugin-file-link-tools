@@ -9,6 +9,7 @@ import { actionFor } from "./actions";
 import { FileLinkSettings } from "./settings";
 import { useConfiguration } from "./use-configuration";
 import { useLocale } from "./use-locale";
+import { WebLinks } from "./web-links";
 
 // No hover UI or link decoration: only override a verified file's normal click.
 function FileLinkActions({ threadId }: PluginThreadHeaderActionProps) {
@@ -59,6 +60,8 @@ function FileLinkActions({ threadId }: PluginThreadHeaderActionProps) {
 }
 
 export default definePluginApp((app) => {
+  app.slots.experimental_appOverlay({ id: "web-links", component: WebLinks });
+  app.slots.navPanel({ id: "link-rules-settings", title: "Link Rules", icon: "ExternalLink", path: "settings", component: () => <div style={{ padding: "16px 20px", overflow: "auto", height: "100%" }}><FileLinkSettings /></div> });
   app.slots.settingsSection({ id: "file-link-settings", component: FileLinkSettings });
   app.slots.experimental_threadHeaderAction({ id: "file-link-actions", title: "Link Rules", component: FileLinkActions });
 });

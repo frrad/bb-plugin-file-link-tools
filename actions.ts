@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { webActions, webRuleSchema, exampleSchema, initialWebRules, initialExamples } from "./web-rules.ts";
 import { fileBasename } from "./links.ts";
 
 export const toolIcons = ["Code", "Terminal", "ExternalLink", "Eye", "FolderOpen", "File", "Image", "Video", "Music", "Type", "Braces", "AppWindow", "Globe", "Database", "Server", "Box", "Archive", "GitBranch", "Wrench", "Settings", "Play", "Zap", "Star", "Search"] as const;
@@ -44,6 +45,9 @@ const toolSchema = z.object({
     }),
 });
 export const configurationSchema = z.object({
+  webDefault: z.enum(webActions).default("bb"),
+  webRules: z.array(webRuleSchema).max(50).default(initialWebRules),
+  examples: z.array(exampleSchema).max(30).default(initialExamples),
   defaultAction: z.string(),
   rules: z.array(z.object({ extensions: z.array(z.string().regex(/^\.[a-z0-9]+$/u, "Use lowercase extensions such as .png")).min(1).max(50), action: z.string() })).max(50),
   tools: z.array(toolSchema).max(50),
@@ -65,6 +69,7 @@ export const configurationSchema = z.object({
 });
 export type Configuration = z.infer<typeof configurationSchema>;
 export const defaultConfiguration: Configuration = {
+  webDefault: "bb", webRules: initialWebRules, examples: initialExamples,
   defaultAction: "external",
   rules: [{ action: "preview", extensions: [
     ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".py", ".go", ".rs", ".java", ".kt", ".kts", ".swift",

@@ -1,14 +1,14 @@
 ---
 name: link-rules
-description: Configure Link Rules file-link click actions and custom tools.
+description: Configure Link Rules web URL patterns, expected-outcome examples, and file-link actions.
 ---
 
 # Link Rules
 
-Read `bb link-rules settings show` before changing configuration. Use `settings default`, `settings rule set/remove`, or `settings set '<json>'`, preserving unrelated values. Actions are `preview` (BB side panel), `external` (default application), `folder`, or a saved tool UUID. See `bb link-rules --help`.
+Read `bb link-rules settings show` first. Use `settings set '<json>'` for web rules or examples, preserving unrelated values. Web fields: `webDefault` is `bb` or `external`; `webRules` is an ordered list of `{pattern, action}`; `examples` contains `{url, action, narrative}`. First matching regex wins, otherwise the default. Patterns are case insensitive RE2 syntax. Empty lists are valid. Narrative text records intent; it is not executed automatically.
 
-Settings → Link Rules has the same rules and custom tools. The `replaceDefaultClick` switch enables overrides. Folders open in the file manager; file extensions override the default action. Commands are split before placeholder substitution and run without a shell. Defaults for `{line}` and `{column}` are 1. Only saved tools may be launched by ID.
+The settings page has a live URL tester and expected-outcome checks. Use domain rule creates an escaped exact-hostname regex at the top, replacing an identical existing rule. Right-clicking an external HTTP(S) anchor shows the current default and one-off options; Change default opens settings with the URL in the tester. Main browser opens on the viewing device, not the server. BB default preserves the client's BB browser preference. Slack links use HTTPS browser handoff rather than slack:// conversion.
 
-Only verified local `file://` links in timeline messages are handled. File operations run on the primary server host, not a remote viewing device. Missing or unverified links keep BB's handler. Modified clicks and context menus remain native. There are no hover cards, metadata summaries, inline previews, long-press gestures or added link icons. Preview actions open BB's own side panel only after a click.
+File actions can also use `settings default` and `settings rule set/remove`. Actions: `preview` (BB panel), `external` (default app), `folder`, or saved tool UUID. File tools split arguments before placeholder substitution and run without a shell. `{line}` and `{column}` default to 1. File operations require the primary server host; other files retain BB's handler. File previews are on-click BB panels, with no hover cards or decorations.
 
-Web URL regex rules are not implemented in this first fork. See the technical reference for inherited compatibility constraints and attribution.
+The `replaceDefaultClick` switch enables normal-click overrides for web and file links. Modified clicks, downloads, BB routes and embedded browser pages are untouched. See README.md and docs/reference.md for limits and compatibility dependencies.
