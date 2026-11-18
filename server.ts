@@ -17,8 +17,8 @@ export const rpcContract = defineRpcContract({
     output: z.object({ ok: z.literal(true) }),
   },
   inspect: {
-    input: target.extend({ includeSummary: z.boolean().default(false) }),
-    output: z.object({ entries: z.object({ files: z.number().int().nonnegative(), directories: z.number().int().nonnegative(), other: z.number().int().nonnegative() }).nullable(), size: z.number().nonnegative().nullable(), directory: z.boolean(), hostId: z.string() }).nullable(),
+    input: target,
+    output: z.object({ directory: z.boolean(), hostId: z.string() }).nullable(),
   },
   openFolder: {
     input: target,
@@ -69,9 +69,9 @@ export default function plugin(bb: BbPluginApi) {
       await launchTool(tool.command, path, line, column);
       return { ok: true as const };
     },
-    inspect: async ({ path, threadId, locale, includeSummary }) => {
+    inspect: async ({ path, threadId, locale }) => {
       const hostId = await requireLocalThread(threadId, locale);
-      const info = await inspectFile(path, locale, includeSummary);
+      const info = await inspectFile(path, locale);
       return info ? { ...info, hostId } : null;
     },
     openFolder: async ({ path, threadId, locale }) => {

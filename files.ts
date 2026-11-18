@@ -1,4 +1,4 @@
-import { opendir, stat } from "node:fs/promises";
+import { stat } from "node:fs/promises";
 import { posix, win32 } from "node:path";
 import revealFile from "./reveal-file.ts";
 import { z } from "zod";
@@ -10,22 +10,13 @@ export const filePathSchema = z.string().min(1).max(32768)
       || (/^[a-z]:[\\/]/iu.test(path) && win32.isAbsolute(path))
       || /^\\\\[^\\/]+\\[^\\/]+/u.test(path)), getMessages("en").absolutePathRequired);
 
-export async function inspectFile(path: string, locale: Locale, includeSummary = false) {
+export async function inspectFile(path: string, locale: Locale) {
   const messages = getMessages(locale);
   filePathSchema.parse(path);
   try {
     const info = await stat(path);
     if (!info.isFile() && !info.isDirectory()) throw new Error(messages.regularFilesOnly);
-    let entries: { files: number; directories: number; other: number } | null = null;
-    if (includeSummary && info.isDirectory()) {
-      entries = { files: 0, directories: 0, other: 0 };
-      for await (const entry of await opendir(path)) {
-        if (entry.isFile()) entries.files++;
-        else if (entry.isDirectory()) entries.directories++;
-        else entries.other++;
-      }
-    }
-    return { size: info.isDirectory() ? null : info.size, directory: info.isDirectory(), entries };
+    return { directory: info.isDirectory() };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT" || code === "ENOTDIR") return null;

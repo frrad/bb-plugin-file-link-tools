@@ -1,4 +1,3 @@
-import { getMessages, type Locale } from "./messages.ts";
 import type { ExperimentalFileLocation } from "@get-bb/plugin-sdk/app";
 
 export type ParsedFileLink = { path: string; location: ExperimentalFileLocation | null };
@@ -34,10 +33,4 @@ export function parseFileLink(href: string | null): ParsedFileLink | null {
 export function fileBasename(path: string): string {
   const separator = /^[a-z]:[\\/]|^\\\\/iu.test(path) ? /[\\/]/u : /\//u;
   return path.split(separator).filter(Boolean).at(-1) ?? "/";
-}
-
-export function formatSize(bytes: number, locale: Locale): string {
-  const units = getMessages(locale).sizeUnits;
-  const unit = bytes === 0 ? 0 : Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: unit === 0 ? 0 : 1 }).format(bytes / 1024 ** unit)} ${units[unit]}`;
 }

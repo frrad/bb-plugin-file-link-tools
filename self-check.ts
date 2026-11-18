@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { mock } from "node:test";
-import { attachLongPress } from "./long-press.ts";
 import { settingsCli } from "./cli.ts";
 import { createServer } from "node:http";
 import { openDefaultFile } from "./default-app.ts";
@@ -8,57 +6,13 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fileBasename, parseFileLink, formatSize } from "./links.ts";
+import { fileBasename, parseFileLink } from "./links.ts";
 import { filePathSchema, inspectFile, openFolder } from "./files.ts";
 import revealFile, { fileManagerUris } from "./reveal-file.ts";
-import { previewKind, textExcerpt } from "./preview.ts";
 import { actionFor, actionIcon, commandArguments, configurationSchema, defaultConfiguration, expandCommand, toolIcons } from "./actions.ts";
 import { launchTool } from "./launch-tool.ts";
 import { settingsMessages } from "./settings-messages.ts";
 import { getMessages, locales, resolveLocale } from "./messages.ts";
-
-mock.timers.enable({ apis: ["setTimeout"] });
-try {
-  const root = new EventTarget();
-  const anchor = root as unknown as HTMLAnchorElement;
-  let verified = true;
-  let holds = 0;
-  const dispose = attachLongPress(root, node => verified && node === root ? anchor : null, () => { holds++; });
-  const emit = (type: string, props = {}) => {
-    const event = new Event(type, { cancelable: true });
-    Object.assign(event, { pointerType: "touch", isPrimary: true, button: 0, pointerId: 1, clientX: 0, clientY: 0, detail: 1 }, props);
-    root.dispatchEvent(event);
-    return event.defaultPrevented;
-  };
-  emit("pointerdown"); mock.timers.tick(100); emit("pointerup"); mock.timers.tick(400);
-  assert.equal(holds, 0); assert.equal(emit("click"), false);
-  emit("pointerdown"); mock.timers.tick(400);
-  assert.equal(holds, 1); assert.equal(emit("contextmenu"), true);
-  emit("pointerup"); assert.equal(emit("click"), true); assert.equal(emit("click"), false);
-  for (const cancellation of ["pointercancel", "scroll", "pointermove"]) {
-    emit("pointerdown"); mock.timers.tick(200); emit(cancellation, { clientX: 11 }); mock.timers.tick(400);
-    assert.equal(holds, 1);
-  }
-  for (const props of [{ pointerType: "mouse" }, { isPrimary: false }, { button: 2 }]) {
-    emit("pointerdown", props); mock.timers.tick(400); assert.equal(holds, 1);
-  }
-  emit("pointerdown"); verified = false; mock.timers.tick(400);
-  assert.equal(holds, 1); assert.equal(emit("contextmenu"), false);
-  verified = true;
-  emit("pointerdown"); mock.timers.tick(400); emit("pointerup");
-  assert.equal(holds, 2); assert.equal(emit("click", { detail: 0 }), false);
-  mock.timers.tick(1000); assert.equal(emit("click"), false);
-  emit("pointerdown"); mock.timers.tick(400); emit("scroll"); mock.timers.tick(1000);
-  assert.equal(emit("click"), false);
-  emit("pointerdown"); dispose(); mock.timers.tick(400);
-  assert.equal(holds, 3); assert.equal(emit("click"), false);
-  emit("pointerdown"); mock.timers.tick(400); assert.equal(holds, 3);
-  const disposeAgain = attachLongPress(root, node => node === root ? anchor : null, () => {});
-  emit("pointerdown"); mock.timers.tick(400); emit("pointerup"); assert.equal(emit("click"), true);
-  mock.timers.tick(100); emit("pointerdown"); mock.timers.tick(400);
-  mock.timers.tick(600); emit("pointerup"); assert.equal(emit("click"), true);
-  disposeAgain();
-} finally { mock.timers.reset(); }
 
 await assert.rejects(revealFile("relative.txt"), /Path must be absolute/);
 for (const path of ["/tmp/O'Reilly.txt", '/tmp/a"b\\c #?%.txt', "/tmp/файл 🐈.txt", "/tmp/'], 'file:///other.txt", "/tmp/$(touch nope); `echo nope`.txt"]) {
@@ -94,9 +48,6 @@ for (const suffix of ["#L0", "#L12C0", "#L20-L12", ":0", ":12:0", ":20-12", "#L9
 for (const link of [null, "https://example.com/a.md", "file:///tmp/%00", "file:///tmp/%GG", "file:///tmp/a?q=x"]) {
   assert.equal(parseFileLink(link), null);
 }
-assert.equal(formatSize(0, "ru"), "0 Б");
-assert.equal(formatSize(1024, "ru"), "1 КиБ");
-assert.equal(formatSize(1024 ** 3, "ru"), "1 ГиБ");
 for (const path of ["relative.md", "//server/file", "/tmp/a\0", "/tmp/a\n"]) assert.equal(filePathSchema.safeParse(path).success, false);
 assert.equal(parseFileLink("file:///C:/Users/Sergey/My%20Files/%D1%84%D0%B0%D0%B9%D0%BB.txt#L12")?.path, "C:\\Users\\Sergey\\My Files\\файл.txt");
 assert.equal(parseFileLink("file://server/share/My%20Files/file.txt")?.path, "\\\\server\\share\\My Files\\file.txt");
@@ -116,20 +67,11 @@ for (const [language, expected] of [
 for (const locale of locales) {
   const catalog = getMessages(locale);
   assert.deepEqual(Object.keys(catalog).sort(), Object.keys(getMessages("en")).sort());
-  assert.equal(catalog.sizeUnits.length, 5);
   for (const value of Object.values(catalog)) {
-    assert.ok(typeof value === "string" ? value.trim().length > 0 : value.every(unit => unit.trim().length > 0));
+    assert.ok(value.trim().length > 0);
   }
-  assert.equal(formatSize(1024, locale), `1 ${catalog.sizeUnits[1]}`);
-  assert.equal(formatSize(1.5 * 1024, locale), `${new Intl.NumberFormat(locale).format(1.5)} ${catalog.sizeUnits[1]}`);
+
 }
-assert.equal(previewKind("photo.PNG", 1024 * 1024)?.kind, "image");
-assert.equal(previewKind("photo.png", 1024 * 1024 + 1), null);
-assert.equal(previewKind("package.json", 64 * 1024)?.kind, "text");
-assert.equal(previewKind("package.json", 64 * 1024 + 1), null);
-assert.equal(previewKind("file.constructor", 10)?.kind, "text");
-assert.equal(textExcerpt("a\n".repeat(20)).split("\n").length, 8);
-assert.equal(textExcerpt("x".repeat(3000)).length, 2000);
 const toolId = "b4bc94a0-9383-4e65-8e7b-ea50c165c1f2";
 const config = configurationSchema.parse({ defaultAction: "folder", rules: [{ extensions: [".png"], action: "preview" }, { extensions: [".ts"], action: toolId }], tools: [{ id: toolId, name: "Editor", icon: "Code", command: 'code --goto "{path}:{line}:{column}"' }] });
 assert.equal(actionFor(config, "/tmp/image.PNG"), "preview");
@@ -222,15 +164,12 @@ try {
   await writeFile(file, "hello");
   const fileInfo = await inspectFile(file, "en");
   assert.ok(fileInfo);
-  assert.equal(fileInfo.size, 5);
-  assert.equal(fileInfo.entries, null);
-  assert.deepEqual(await inspectFile(dir, "en"), { size: null, directory: true, entries: null });
+  assert.equal(fileInfo.directory, false);
+  assert.deepEqual(await inspectFile(dir, "en"), { directory: true });
   await mkdir(join(dir, "nested"));
   await writeFile(join(dir, "nested", "not-counted.txt"), "nested");
   await writeFile(join(dir, ".hidden"), "hidden");
   await symlink(file, join(dir, "link"));
-  assert.deepEqual((await inspectFile(dir, "en", true))?.entries, { files: 2, directories: 1, other: 1 });
-  assert.equal((await inspectFile(file, "en", true))?.entries, null);
   for (const locale of locales) {
     for (const name of ["missing", "navigator.language", "www.rru"]) {
       assert.equal(await inspectFile(join(dir, name), locale), null);
@@ -240,6 +179,6 @@ try {
     await assert.rejects(inspectFile("relative.txt", locale));
   }
   await writeFile(join(dir, "navigator.language"), "real file");
-  assert.equal((await inspectFile(join(dir, "navigator.language"), "en"))?.size, 9);
+  assert.equal((await inspectFile(join(dir, "navigator.language"), "en"))?.directory, false);
 } finally { await rm(dir, { recursive: true }); }
-console.log("File links, existence checks, preview limits, locales, sizes and errors: passed.");
+console.log("File rules, existence checks, commands, locales and errors: passed.");

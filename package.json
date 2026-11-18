@@ -1,5 +1,5 @@
 {
-  "name": "bb-plugin-file-link-tools",
+  "name": "bb-plugin-link-rules",
   "version": "0.1.0",
   "type": "module",
   "engines": {
@@ -7,8 +7,8 @@
     "bbPluginSdk": ">=0.6.79"
   },
   "bb": {
-    "name": "File Link Tools",
-    "description": "File details, previews, configurable link actions and BB’s native application menu.",
+    "name": "Link Rules",
+    "description": "Configurable file-link click actions without hover cards or decorations.",
     "branding": {
       "icon": "FolderOpen"
     },
@@ -40,5 +40,10 @@
     "check": "tsc --noEmit",
     "test": "node --experimental-strip-types self-check.ts",
     "build": "bb plugin build"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/frrad/bb-plugin-file-link-tools.git"
   }
 }

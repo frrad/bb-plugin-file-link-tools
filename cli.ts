@@ -9,7 +9,7 @@ export function settingsCli(read: () => Promise<Configuration>, save: (value: un
     return output(await save(parsed.data));
   }
   return defineCli({
-    name: "file-link-tools", summary: "Read or change file-link actions and custom tools",
+    name: "link-rules", summary: "Read or change file-link actions and custom tools",
     commands: {
       "settings show": cliCommand({ summary: "Show current configuration", async run() { return output(await read()); } }),
       "settings set": cliCommand({

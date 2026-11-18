@@ -1,68 +1,40 @@
-# File Link Tools
+# Link Rules
 
-**Useful actions for every file link in BB.**
+A minimal fork of [File Link Tools](https://github.com/linniksa/bb-plugin-file-link-tools) by Sergey Linnik. Keeps configurable file-link click actions and removes the hover cards, thumbnails, metadata summaries, long-press gestures and added link icons.
 
-See file details without leaving the conversation. Preview code in BB, reveal files in their folder, or open them with the app you choose.
+Choose a default file action, override it by extension, or launch a saved tool. Common code and text files open in BB; other files use their default application. Folders open in the file manager. Modified clicks and BB's context menu keep their usual behavior.
 
-![File Link Tools: file metadata, a text preview, quick actions and a folder summary](docs/media/file-cards.gif)
+## Configure
 
-## A small card. The actions you need.
+Open **Settings → Link Rules**. The rule tester shows which action a filename selects. Custom commands accept `{path}`, `{line}` and `{column}`; arguments are parsed before substitution and run without a shell.
 
-- **Hover for details.** File size, a one-line path and small image or text previews.
-- **Peek into folders.** Immediate file and subfolder counts, without a recursive scan.
-- **Know what a click does.** Each link’s icon reflects its configured action.
-- **Keep familiar controls.** Copy the name or path beside it; use BB’s own application menu.
-- **Use touch or a keyboard.** Long press opens the card. Down Arrow enters its actions; Escape closes it.
+Agents can use `bb link-rules settings show`, `settings default`, `settings rule set/remove`, and `settings set`.
 
-## Make every click yours
+## Install and develop
 
-Start with sensible defaults:
-
-| File type | Normal click |
-| --- | --- |
-| Common code, configuration and text extensions | Preview in BB’s side panel |
-| Other files, including media and documents | Open with the system’s default application |
-| Folders | Open in the file manager |
-
-Change these in **Settings → File Link Tools**. Extension rules override the default. Add your own tools with a name, icon and command, then try a filename to check which rule wins.
-
-![File Link Tools settings: extension rules, a VS Code command and a filename rule check](docs/media/settings.gif)
-
-For example, a VS Code tool can use:
-
-```text
-code --goto "{path}:{line}:{column}"
-```
-
-Commands run without a shell. BB supplies the native application menu; the plugin does not maintain a separate app list.
-
-## Install
-
-Requires **BB 0.47+** and **Node.js 22.6+**.
+Requires BB 0.47+ and Node.js 22.6+.
 
 ```sh
-bb plugin install https://github.com/linniksa/bb-plugin-file-link-tools
+bb plugin install git:https://github.com/frrad/bb-plugin-file-link-tools.git
 ```
 
-Open **Settings → File Link Tools** to customize it. Turn off **Use configured file-link actions** to let BB handle normal clicks again.
-
-## Ask your agent
-
-“Open Python files in BB” or “Use my editor for TypeScript.” Agents can change the same settings through the plugin CLI:
+From a checkout:
 
 ```sh
-bb file-link-tools settings show
-bb file-link-tools settings rule set .py,.ts,.tsx preview
-bb file-link-tools --help
+npm ci
+npm run check
+npm test
+bb plugin build
+bb plugin install .
 ```
 
-## Good to know
+The plugin ID is `link-rules`, separate from upstream's `file-link-tools`.
+Disable upstream's click overrides before using both plugins together.
 
-- Cards and click overrides require a confirmed existing file or folder. Other links retain BB’s handling.
-- Inline previews are for small images and text. Video has no inline player; open it with the default application or BB’s viewer.
-- File operations require a local thread on BB’s primary host. macOS has been exercised; native Windows and Linux GUI behavior remains unverified. WSL is not supported.
-- English, Simplified Chinese, Korean, Japanese, Spanish and Russian are selected automatically from the browser locale.
+## Current scope
 
-The animations show the actual plugin in BB, with English UI and example links. The custom-tool example is an unsaved settings draft.
+This first fork handles existing local file and folder links. Web URL regex routing and direct Slack-app links are not implemented yet.
 
-[Development, preview limits and platform details](docs/reference.md) · [Agent instructions](skills/file-link-tools/SKILL.md)
+File actions require a thread on BB's primary server host and launch on that host. They do not open files on a remote viewing device. macOS was exercised upstream; Windows and Linux GUI behavior has not been verified here. BB's timeline DOM and the internal default-application daemon route remain compatibility dependencies inherited from upstream.
+
+[Technical reference](docs/reference.md).

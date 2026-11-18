@@ -1,17 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { parseFileLink, type ParsedFileLink } from "./links";
 
-export function useFileLinks(threadId: string, inspect: (path: string) => Promise<{ directory: boolean; hostId: string } | null>) {
+export function useFileLinks(threadId: string, inspect: ((path: string) => Promise<{ directory: boolean; hostId: string } | null>) | null) {
   const verified = useRef(new Map<HTMLAnchorElement, ParsedFileLink & { directory: boolean; hostId: string }>());
-  const [anchors, setAnchors] = useState<HTMLAnchorElement[]>([]);
   useEffect(() => {
     let disposed = false;
     let frame = 0;
     const observed = new Map<HTMLAnchorElement, { href: string; link: ParsedFileLink }>();
     const checks = new Map<string, Promise<{ directory: boolean; hostId: string } | null>>();
     verified.current = new Map();
-    setAnchors([]);
-    const publish = () => setAnchors([...verified.current.keys()]);
+    if (!inspect) return;
     const visibility = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
@@ -21,7 +19,7 @@ export function useFileLinks(threadId: string, inspect: (path: string) => Promis
         visibility.unobserve(anchor);
         let check = checks.get(candidate.link.path);
         if (!check) {
-          // The hover card reports inspection errors; decoration must preserve native links on failure.
+          // Unverified links retain BB’s normal behavior.
           check = inspect(candidate.link.path).catch(() => null);
           checks.set(candidate.link.path, check);
         }
@@ -29,14 +27,12 @@ export function useFileLinks(threadId: string, inspect: (path: string) => Promis
           if (disposed || !info || observed.get(anchor) !== candidate
             || !anchor.isConnected || anchor.getAttribute("href") !== candidate.href) return;
           verified.current.set(anchor, { ...candidate.link, ...info });
-          publish();
         });
       }
     });
     function sync() {
       frame = 0;
       const found = new Set<HTMLAnchorElement>();
-      let changed = false;
       for (const anchor of Array.from(document.querySelectorAll<HTMLAnchorElement>("[data-timeline-row-id] a[href]"))) {
         if (anchor.closest("[data-timeline-row-id]")?.getAttribute("data-timeline-row-id")?.split(":")[0] !== threadId) continue;
         const href = anchor.getAttribute("href")!;
@@ -44,7 +40,7 @@ export function useFileLinks(threadId: string, inspect: (path: string) => Promis
         if (!link) continue;
         found.add(anchor);
         if (observed.get(anchor)?.href === href) continue;
-        changed = verified.current.delete(anchor) || changed;
+        verified.current.delete(anchor);
         observed.set(anchor, { href, link });
         visibility.observe(anchor);
       }
@@ -52,9 +48,8 @@ export function useFileLinks(threadId: string, inspect: (path: string) => Promis
         if (found.has(anchor)) continue;
         visibility.unobserve(anchor);
         observed.delete(anchor);
-        changed = verified.current.delete(anchor) || changed;
+        verified.current.delete(anchor);
       }
-      if (changed) publish();
     }
     const mutations = new MutationObserver(() => {
       if (!frame) frame = requestAnimationFrame(sync);
@@ -69,5 +64,5 @@ export function useFileLinks(threadId: string, inspect: (path: string) => Promis
       verified.current.clear();
     };
   }, [threadId, inspect]);
-  return { anchors, verified };
+  return verified;
 }

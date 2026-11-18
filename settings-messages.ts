@@ -22,7 +22,7 @@ const catalogs = {
     "removeTool": "Remove tool",
     "usedTool": "Used by an action",
     "check": "Check a rule",
-    "checkHint": "The link icon shows the selected action. Folders always open in the file manager.",
+    "checkHint": "The tester shows the selected action. Folders always open in the file manager.",
     "filename": "File name",
     "defaultUsed": "Default action",
     "ruleUsed": "Rule",
