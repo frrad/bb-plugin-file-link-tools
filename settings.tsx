@@ -23,6 +23,7 @@ export function FileLinkSettings() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [sample, setSample] = useState(() => sessionStorage.getItem("link-rules:example") ?? "https://modal.enterprise.slack.com/archives/C123");
+  const [tab, setTab] = useState<"web" | "examples" | "files">("web");
   const [filename, setFilename] = useState("photo.png");
   const dirty = !!draft && JSON.stringify(toConfig(draft)) !== JSON.stringify(base);
   useEffect(() => {
@@ -60,12 +61,19 @@ export function FileLinkSettings() {
     finally { setBusy(false); }
   }
   return <div className="lr-settings" data-link-rules>
-    <header className="lr-heading"><div><h2>Link rules</h2><p>Choose where links open. First matching web rule wins.</p></div><span className="lr-caption">Changes apply after saving</span></header>
+    <header className="lr-heading"><div><h2>Where links open</h2><p>Set destinations, add exceptions, and check your examples.</p></div></header>
+    <nav className="lr-tabs" role="tablist" aria-label="Link settings sections">{([ ["web", "Web links", draft.webRules.length], ["examples", "Examples", draft.examples.length], ["files", "File links", draft.rules.length] ] as const).map(([id, title, count]) => <button key={id} id={`lr-tab-${id}`} role="tab" aria-label={title} aria-selected={tab === id} aria-controls={`lr-panel-${id}`} onClick={() => setTab(id)} onKeyDown={event => {
+      const tabs = ["web", "examples", "files"] as const;
+      const index = tabs.indexOf(id);
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      event.preventDefault(); const next = tabs[(index + (event.key === "ArrowRight" ? 1 : 2)) % 3]; setTab(next); document.getElementById(`lr-tab-${next}`)?.focus();
+    }} tabIndex={tab === id ? 0 : -1}>{title}<span aria-hidden="true">{count}</span></button>)}</nav>
     <fieldset disabled={busy}>
-      <div className="lr-columns">
-        <section aria-labelledby="lr-web-title">
-          <div className="lr-section-heading"><h3 id="lr-web-title">Web links</h3><WebActionSelect label="Default for web links" value={draft.webDefault} onChange={webDefault => edit({ ...draft, webDefault })} /></div>
-          <p className="lr-hint">BB default follows your browser preference. Main browser opens on this device.</p>
+      <div className="lr-tab-panels">
+        <section id="lr-panel-web" role="tabpanel" aria-labelledby="lr-tab-web" hidden={tab !== "web"}>
+          <div className="lr-default"><div><h3>Default destination</h3><p>For web links without a matching rule.</p></div><WebActionSelect label="Default for web links" value={draft.webDefault} onChange={webDefault => edit({ ...draft, webDefault })} /></div>
+          <div className="lr-section-heading"><div><h3>URL rules</h3><p className="lr-hint">Exceptions to the default. Checked from top to bottom; first match wins.</p></div><button className="lr-add-rule" disabled={draft.webRules.length >= 50} onClick={() => edit({ ...draft, webRules: [...draft.webRules, { pattern: "", action: draft.webDefault }] })}>+ Add rule</button></div>
+          <div className="lr-table-heading"><span>URL pattern</span><span>Open in</span></div>
           <div className="lr-list lr-rule-list">
             {draft.webRules.map((rule, index) => <div className="lr-rule" key={index}>
               <div className="lr-rule-main"><input aria-label={`URL pattern ${index + 1}`} className="lr-mono" value={rule.pattern} spellCheck={false} placeholder="^https://example\.com/" onChange={event => patchRule(index, { pattern: event.target.value })} /><WebActionSelect label={`Web action ${index + 1}`} value={rule.action} onChange={action => patchRule(index, { action })} /></div>
@@ -73,19 +81,18 @@ export function FileLinkSettings() {
             </div>)}
             {!draft.webRules.length && <p className="lr-empty">All web links use the default above.</p>}
           </div>
-          <button className="lr-text-button" disabled={draft.webRules.length >= 50} onClick={() => edit({ ...draft, webRules: [...draft.webRules, { pattern: "", action: draft.webDefault }] })}>+ Web rule</button>
-          <div className="lr-tester"><label htmlFor="lr-sample">Try a link</label><input id="lr-sample" value={sample} spellCheck={false} onChange={event => setSample(event.target.value)} /><p role="status">{sampleResult ? <><strong>{webActionLabels[sampleResult.action]}</strong><span> · {sampleResult.ruleIndex < 0 ? "Default" : `Rule ${sampleResult.ruleIndex + 1}`}</span></> : checked ? "Enter an HTTP(S) link" : "Fix the rules to test a link"}</p></div>
+          <div className="lr-tester"><label htmlFor="lr-sample">Check a link</label><input id="lr-sample" value={sample} spellCheck={false} onChange={event => setSample(event.target.value)} /><p role="status">{sampleResult ? <><strong>{webActionLabels[sampleResult.action]}</strong><span> · {sampleResult.ruleIndex < 0 ? "Default destination" : `Rule ${sampleResult.ruleIndex + 1}`}</span></> : checked ? "Enter an HTTP(S) link" : "Fix the rules to test a link"}</p></div>
         </section>
-        <section aria-labelledby="lr-examples-title">
-          <div className="lr-section-heading"><h3 id="lr-examples-title">Examples & intent</h3><button className="lr-text-button" disabled={draft.examples.length >= 30} onClick={() => edit({ ...draft, examples: [...draft.examples, { url: webUrl(sample) ?? "https://example.com/", action: sampleResult?.action ?? draft.webDefault, narrative: "" }] })}>+ Example</button></div>
-          <p className="lr-hint">Choose an outcome and describe the general rule. Examples check your rules; “Use domain rule” applies one.</p>
+        <section id="lr-panel-examples" role="tabpanel" aria-labelledby="lr-tab-examples" hidden={tab !== "examples"}>
+          <div className="lr-section-heading"><h3 id="lr-examples-title">Expected behavior</h3><button className="lr-text-button" disabled={draft.examples.length >= 30} onClick={() => edit({ ...draft, examples: [...draft.examples, { url: webUrl(sample) ?? "https://example.com/", action: sampleResult?.action ?? draft.webDefault, narrative: "" }] })}>+ Example</button></div>
+          <p className="lr-hint">Save sample links and what should happen to them. The status compares each example with your rules.</p>
           <div className="lr-list lr-example-list">
             {draft.examples.map((example, index) => {
               const actual = checked ? webActionFor(checked, example.url) : null;
               const passes = actual?.action === example.action;
               return <div className="lr-example" key={index}>
                 <div className="lr-example-top"><input aria-label={`Example URL ${index + 1}`} value={example.url} spellCheck={false} onChange={event => patchExample(index, { url: event.target.value })} /><WebActionSelect label={`Expected outcome ${index + 1}`} value={example.action} onChange={action => patchExample(index, { action })} /></div>
-                <textarea aria-label={`General rule ${index + 1}`} rows={2} placeholder="What should happen to similar links?" value={example.narrative} maxLength={500} onChange={event => patchExample(index, { narrative: event.target.value })} />
+                <label className="lr-intent-label">General rule<textarea aria-label={`General rule ${index + 1}`} rows={2} placeholder="What should happen to similar links?" value={example.narrative} maxLength={500} onChange={event => patchExample(index, { narrative: event.target.value })} /></label>
                 <div className="lr-example-bottom"><span className={actual ? passes ? "lr-pass" : "lr-mismatch" : "lr-caption"}>{actual ? passes ? "✓ Matches" : `Expected ${webActionLabels[example.action]}; gets ${webActionLabels[actual.action]}` : "Not checked"}</span>
                   <button className="lr-text-button" disabled={!webUrl(example.url) || (draft.webRules.length >= 50 && !draft.webRules.some(rule => rule.pattern === domainPattern(example.url)))} onClick={() => edit({ ...draft, ...applyExample(draft, example) })}>Use domain rule</button>
                   <button aria-label={`Remove example ${index + 1}`} onClick={() => edit({ ...draft, examples: draft.examples.filter((_, i) => i !== index) })}>×</button>
@@ -96,7 +103,7 @@ export function FileLinkSettings() {
           </div>
         </section>
       </div>
-      <details className="lr-files"><summary>File links <span>{draft.rules.length} extension {draft.rules.length === 1 ? "rule" : "rules"} · {draft.tools.length} custom tools</span></summary>
+      <section id="lr-panel-files" role="tabpanel" aria-labelledby="lr-tab-files" hidden={tab !== "files"} className="lr-files"><h3>File destinations</h3><p className="lr-hint">Match files by extension. Folders open in the file manager.</p>
         <div className="lr-file-content"><div className="lr-inline"><label>Other files {fileSelect(draft.defaultAction, defaultAction => edit({ ...draft, defaultAction }), "Default for file links")}</label><span className="lr-hint">Folders open in the file manager.</span></div>
           {draft.rules.map((rule, index) => <div className="lr-file-rule" key={index}><input aria-label={`Extensions ${index + 1}`} value={rule.extensions} onChange={event => edit({ ...draft, rules: draft.rules.map((r, i) => i === index ? { ...r, extensions: event.target.value } : r) })} />{fileSelect(rule.action, action => edit({ ...draft, rules: draft.rules.map((r, i) => i === index ? { ...r, action } : r) }), `File action ${index + 1}`)}<button aria-label={`Remove file rule ${index + 1}`} onClick={() => edit({ ...draft, rules: draft.rules.filter((_, i) => i !== index) })}>×</button></div>)}
           <button className="lr-text-button" disabled={draft.rules.length >= 50} onClick={() => edit({ ...draft, rules: [...draft.rules, { extensions: "", action: draft.defaultAction }] })}>+ File rule</button>
@@ -106,7 +113,7 @@ export function FileLinkSettings() {
             <button className="lr-text-button" disabled={draft.tools.length >= 50} onClick={() => edit({ ...draft, tools: [...draft.tools, { id: crypto.randomUUID(), name: "", icon: "Terminal", command: "" }] })}>+ Custom tool</button>
           </details>
         </div>
-      </details>
+      </section>
     </fieldset>
     {!parsed.success && dirty && <p className="lr-error" role="alert">{parsed.error.issues.map(issue => `${issue.path.join(".")}: ${issue.message}`).join(" · ")}</p>}
     {saveError && <p className="lr-error" role="alert">{saveError}</p>}

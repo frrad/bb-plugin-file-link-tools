@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { configurationSchema, defaultConfiguration } from "./actions";
 import { applyExample, domainPattern, patternSchema, webActionFor, webUrl } from "./web-rules";
 import { openMainBrowser } from "./web-opening";
+import { browserPreferenceKey, enableBBBrowser } from "./browser-preference";
 
 describe("web routing", () => {
   it("migrates stored file-only settings without losing file rules", () => {
@@ -38,6 +39,16 @@ describe("web routing", () => {
     const updated = applyExample(config, { ...example, action: "bb" });
     expect(updated.webRules).toHaveLength(config.webRules.length);
     expect(updated.webRules[0].action).toBe("bb");
+  });
+  it("explicit BB opening enables the local BB browser preference", () => {
+    const old = (window as any).bbDesktop;
+    (window as any).bbDesktop = { browser: {} };
+    localStorage.setItem(browserPreferenceKey, "false");
+    let notified = false;
+    const listener = (event: StorageEvent) => { if (event.key === browserPreferenceKey && event.newValue === "true") notified = true; };
+    window.addEventListener("storage", listener);
+    try { enableBBBrowser(); expect(localStorage.getItem(browserPreferenceKey)).toBe("true"); expect(notified).toBe(true); }
+    finally { window.removeEventListener("storage", listener); localStorage.clear(); (window as any).bbDesktop = old; }
   });
   it("opens on the viewing desktop, not through a server RPC", async () => {
     const received: string[] = [];

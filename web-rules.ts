@@ -3,7 +3,7 @@ import { RE2JS } from "re2js";
 
 export const webActions = ["bb", "external"] as const;
 export type WebAction = typeof webActions[number];
-export const webActionLabels: Record<WebAction, string> = { bb: "BB default", external: "Main browser" };
+export const webActionLabels: Record<WebAction, string> = { bb: "BB browser", external: "Main browser" };
 const compiled = new Map<string, RE2JS>();
 export function compilePattern(pattern: string) {
   let regex = compiled.get(pattern);
@@ -31,7 +31,7 @@ export const exampleSchema = z.object({ url: exampleUrlSchema, action: z.enum(we
 export const initialWebRules = [{ pattern: "^https?://([a-z0-9-]+\\.)*slack\\.com([/:?#]|$)", action: "external" as const }];
 export const initialExamples = [
   { url: "https://modal.enterprise.slack.com/archives/C123/p1234567890123456", action: "external" as const, narrative: "All Slack links should open in my main browser so it can hand them to the Slack app." },
-  { url: "https://github.com/frrad/bb-plugin-file-link-tools", action: "bb" as const, narrative: "GitHub links should follow my usual BB browser preference." },
+  { url: "https://github.com/frrad/bb-plugin-file-link-tools", action: "bb" as const, narrative: "GitHub links should open inside BB." },
 ];
 export type WebRule = z.infer<typeof webRuleSchema>;
 export type LinkExample = z.infer<typeof exampleSchema>;

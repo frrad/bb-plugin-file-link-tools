@@ -4,7 +4,7 @@ Link Rules derives from [File Link Tools](https://github.com/linniksa/bb-plugin-
 
 ## Web behavior
 
-The app-wide overlay handles external HTTP(S) anchors on the viewing client. First matching pattern wins; otherwise `webDefault` applies. `bb` delegates to the anchor's existing BB handler. `external` uses the viewing desktop's `bbDesktop.openExternalUrl`, or a normal new browser tab on web clients. It never asks the server to launch a browser. There is no public SDK method to force the main browser: the isolated desktop bridge call in `web-opening.ts` is a feature-checked compatibility dependency, to revalidate after BB upgrades.
+The app-wide overlay handles external HTTP(S) anchors on the viewing client. First matching pattern wins; otherwise `webDefault` applies. `bb` opens in BB’s desktop browser by enabling its client-local `bb.openLinksInAppBrowser` preference when needed, notifying BB synchronously, and then delegating to the original anchor’s panel context. This isolated compatibility dependency is in `browser-preference.ts`. It leaves the preference enabled. On clients without a desktop browser, ordinary clicks use the main browser and the menu disables the BB-browser option. `external` uses the viewing desktop's `bbDesktop.openExternalUrl`, or a normal new browser tab on web clients. It never asks the server to launch a browser. There is no public SDK method to force the main browser: the isolated desktop bridge call in `web-opening.ts` is a feature-checked compatibility dependency, to revalidate after BB upgrades.
 
 The menu uses app DOM rather than Electron's native menu because BB exposes no public web-link menu contribution slot. It supports arrow keys, Home/End, Enter, Escape, outside click, focus restoration and viewport clamping. Copy uses BB's SDK clipboard API. Select all selects the main content containing the link. Shift-right-click keeps the native menu. Change default opens the plugin's own settings panel through SDK navigation and carries the URL in per-tab session storage. Normal modified clicks are left alone.
 
@@ -14,7 +14,7 @@ Examples store an HTTP(S) URL, desired action and narrative. They are acceptance
 
 ## File behavior
 
-The file enable switch also controls web click overrides. Disabling it retains normal BB clicks, with the one-off web menu still available. File extensions match case insensitively and override the default. Preview opens BB's side panel only on click, preserving line/range locations. Default application uses BB's host daemon `targetId: "default-app"`; this internal route is inherited and must be revalidated after BB upgrades. File operations require a thread on the primary host.
+The file enable switch also controls web click overrides. Disabling it retains normal BB clicks, with the one-off web menu still available. Its header resolves the current device’s destination. File extensions match case insensitively and override the default. Preview opens BB's side panel only on click, preserving line/range locations. Default application uses BB's host daemon `targetId: "default-app"`; this internal route is inherited and must be revalidated after BB upgrades. File operations require a thread on the primary host.
 
 Custom tools accept `{path}`, `{line}` and `{column}`; arguments are split before substitution without shell expansion. A range uses its start; absent line/column default to 1. Windows scripts need an explicit interpreter. The server launches only saved tool IDs and rechecks target existence. Commands return after startup, not GUI application exit.
 

@@ -6,18 +6,18 @@ A fork of [File Link Tools](https://github.com/linniksa/bb-plugin-file-link-tool
 
 ## Configure
 
-Open **Link Rules** in the sidebar or **Settings → Link Rules**.
+Open **Link Rules** in the sidebar or **Settings → Link Rules**. The three tabs separate Web links, Examples, and File links; edits stay in place while switching tabs.
 
-- **Web links:** choose the fallback and add URL regex rules. First match wins; reorder with the arrows. Patterns are case insensitive and use RE2 syntax (no backreferences or lookahead). Slack links open in your main browser by default; other web links follow BB's browser preference.
+- **Web links:** choose the fallback and add URL regex rules. First match wins; reorder with the arrows. Patterns are case insensitive and use RE2 syntax (no backreferences or lookahead). Slack links open in your main browser by default; other web links open in the BB browser on desktop.
 - **Examples & intent:** save example URLs, choose expected outcomes and describe what should happen to similar links. Each example reports whether the current rules agree. **Use domain rule** adds or updates a rule for that example's exact hostname at the top. Narrative text is saved intent, not an automatically executed instruction.
 - **Try a link:** see the winning rule and destination before saving.
-- **File links:** expand to configure extension rules and custom tools. Code and text default to BB's preview; other files use their default application. Folders open in the file manager.
+- **File links:** open this tab to configure extension rules and custom tools. Code and text default to BB's preview; other files use their default application. Folders open in the file manager.
 
 Click **Save changes** to apply edits. Empty web rule and example lists are supported.
 
 Right-click a web link for its current default, one-off opening options, Copy link, Copy, Select all, and **Change default…**, which opens the settings page with that URL in the tester. Shift-right-click bypasses the plugin's menu. Modified clicks retain BB's behavior.
 
-**BB default** follows the current viewing client's browser preference. **Main browser** opens on that same viewing device, even when the server or thread runs remotely. Slack uses the original HTTPS link, allowing your browser to hand off to Slack; direct `slack://` conversion is not performed.
+**BB browser** explicitly opens inside the desktop app and enables BB’s local “Open links in app browser” preference when needed. On web-only clients, the main browser is the fallback; the desktop-only menu option is disabled. **Main browser** opens on that same viewing device, even when the server or thread runs remotely. Slack uses the original HTTPS link, allowing your browser to hand off to Slack; direct `slack://` conversion is not performed.
 
 ## Install and develop
 

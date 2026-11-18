@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useConfiguration } from "./use-configuration";
 import { webActionFor, webActionLabels, type WebAction } from "./web-rules";
 import { externalAnchor, openMainBrowser } from "./web-opening";
+import { browserPreferenceKey, enableBBBrowser, hasBBBrowser } from "./browser-preference";
 import "./settings.css";
 
 type Menu = { anchor: HTMLAnchorElement; url: string; x: number; y: number; selection: string };
@@ -17,7 +18,9 @@ export function WebLinks() {
   const root = useRef<HTMLDivElement>(null);
   const bypass = useRef(false);
   const previousFocus = useRef<HTMLElement | null>(null);
-  const defaultAction = config && menu ? (enabled ? webActionFor(config, menu.url)?.action : "bb") ?? "bb" : "bb";
+  const configuredAction = config && menu ? (enabled ? webActionFor(config, menu.url)?.action : "bb") ?? "bb" : "bb";
+  const browserAvailable = hasBBBrowser();
+  const defaultAction = (!enabled && localStorage.getItem(browserPreferenceKey) === "false") || (configuredAction === "bb" && !browserAvailable) ? "external" : configuredAction;
 
   function dismiss(restore = false) {
     setMenu(null);
@@ -31,8 +34,8 @@ export function WebLinks() {
       try { void Promise.resolve(openMainBrowser(target.url)).catch(error => toast.error(String(error))); }
       catch (error) { toast.error(String(error)); }
     } else {
-      // Replay the anchor's own handler to use its BB panel context without
-      // changing the client's global browser preference.
+      try { enableBBBrowser(); } catch (error) { toast.error(String(error)); return; }
+      // Replay with BB’s preference enabled, in the original panel context.
       bypass.current = true;
       try { if (target.anchor.isConnected && target.anchor.href === target.url) target.anchor.click(); else navigate.openUrl(target.url); }
       finally { bypass.current = false; }
@@ -47,7 +50,15 @@ export function WebLinks() {
     function click(event: MouseEvent) {
       if (bypass.current || !enabled || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
       const anchor = externalAnchor(event.target);
-      if (!anchor || webActionFor(config!, anchor.href)?.action !== "external") return;
+      if (!anchor) return;
+      if (webActionFor(config!, anchor.href)?.action !== "external") {
+        if (hasBBBrowser()) {
+          try { enableBBBrowser(); } catch (error) {
+            event.preventDefault(); toast.error(String(error));
+          }
+        }
+        return;
+      }
       event.preventDefault(); event.stopImmediatePropagation();
       try { void Promise.resolve(openMainBrowser(anchor.href)).catch(error => toast.error(String(error))); }
       catch (error) { toast.error(String(error)); }
@@ -106,7 +117,7 @@ export function WebLinks() {
   return createPortal(<div ref={root} data-link-rules role="menu" aria-label="Web link" className="lr-menu" style={{ left: menu.x, top: menu.y }}>
     <button role="menuitem" onClick={() => open(defaultAction)}>Default: {webActionLabels[defaultAction]}</button>
     <hr role="separator" />
-    <button role="menuitem" onClick={() => open("bb")}>Open with BB default</button>
+    <button role="menuitem" disabled={!browserAvailable} title={browserAvailable ? undefined : "Available in the BB desktop app"} onClick={() => open("bb")}>Open in BB browser</button>
     <button role="menuitem" onClick={() => open("external")}>Open in main browser</button>
     <hr role="separator" />
     <button role="menuitem" onClick={() => void copy(menu.url)}>Copy link</button>
