@@ -107,7 +107,7 @@ export function FileLinkSettings() {
         <section id="lr-panel-web" role="tabpanel" aria-labelledby="lr-tab-web" hidden={tab !== "web"}>
           <div className="lr-default"><div><h3>Default destination</h3><p>For web links without a matching rule.</p></div><WebActionSelect label="Default for web links" value={draft.webDefault} onChange={webDefault => edit({ ...draft, webDefault })} /></div>
           <div className="lr-web-grid"><section className="lr-web-rules" aria-label="URL rules">
-          <div className="lr-section-heading"><div><h3>URL rules</h3><p className="lr-hint">Exceptions to the default. First match wins.</p></div><button className="lr-add-rule" disabled={draft.webRules.length >= 50} onClick={() => edit({ ...draft, webRules: [...draft.webRules, { pattern: "", action: draft.webDefault }] })}>+ Add rule</button></div>
+          <div className="lr-section-heading"><div><h3>URL rules</h3><p className="lr-hint">Exceptions to the default. First match wins.</p></div><button className="lr-add-button" disabled={draft.webRules.length >= 50} onClick={() => edit({ ...draft, webRules: [...draft.webRules, { pattern: "", action: draft.webDefault }] })}>+ Add rule</button></div>
           <div className="lr-table-heading"><span>URL pattern</span><span>Open in</span></div>
           <div className="lr-list lr-rule-list">
             {draft.webRules.map((rule, index) => <div className="lr-rule" key={index}>
@@ -119,7 +119,7 @@ export function FileLinkSettings() {
           <div className="lr-tester"><label htmlFor="lr-sample">Check a link</label><input id="lr-sample" value={sample} spellCheck={false} onChange={event => setSample(event.target.value)} /><p role="status">{sampleResult ? <><strong>{webActionLabels[sampleResult.action]}</strong><span> · {sampleResult.ruleIndex < 0 ? "Default destination" : `Rule ${sampleResult.ruleIndex + 1}`}</span></> : checked ? "Enter an HTTP(S) link" : "Fix the rules to test a link"}</p></div>
         </section>
         <section className="lr-web-examples" aria-labelledby="lr-examples-title">
-          <div className="lr-section-heading"><h3 id="lr-examples-title">Examples</h3><button className="lr-text-button" disabled={draft.examples.length >= 30} onClick={() => edit({ ...draft, examples: [...draft.examples, { url: webUrl(sample) ?? "https://example.com/", action: sampleResult?.action ?? draft.webDefault, narrative: "" }] })}>+ Example</button></div>
+          <div className="lr-section-heading"><h3 id="lr-examples-title">Examples</h3><button className="lr-add-button" disabled={draft.examples.length >= 30} onClick={() => edit({ ...draft, examples: [...draft.examples, { url: webUrl(sample) ?? "https://example.com/", action: sampleResult?.action ?? draft.webDefault, narrative: "" }] })}>+ Add example</button></div>
           <p className="lr-hint">Expected outcomes for sample links. Checked against your rules.</p>
           <div ref={examplesRoot} className="lr-list lr-example-list">
             {draft.examples.map((example, index) => {
