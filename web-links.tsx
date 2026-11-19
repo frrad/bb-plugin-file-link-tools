@@ -6,6 +6,7 @@ import { useConfiguration } from "./use-configuration";
 import { webActionFor, webActionLabels, type WebAction } from "./web-rules";
 import { externalAnchor, openMainBrowser } from "./web-opening";
 import { browserPreferenceKey, enableBBBrowser, hasBBBrowser } from "./browser-preference";
+import { requestExample } from "./example-request";
 import "./settings.css";
 
 type Menu = { anchor: HTMLAnchorElement; url: string; x: number; y: number; selection: string };
@@ -129,7 +130,7 @@ export function WebLinks() {
     }}>Select all <kbd>⌘A</kbd></button>
     <hr role="separator" />
     <button role="menuitem" onClick={() => {
-      sessionStorage.setItem("link-rules:example", menu.url); dismiss(); navigate.toPluginPanel("settings");
+      requestExample(menu.url, defaultAction); dismiss(); navigate.toPluginPanel("settings");
     }}>Change default…</button>
   </div>, document.body);
 }

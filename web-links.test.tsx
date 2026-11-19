@@ -50,7 +50,7 @@ describe("web-link interaction", () => {
     expect(document.querySelector('[role="menu"]')).toBe(null); expect(document.activeElement).toBe(anchor);
     fireEvent.contextMenu(anchor);
     fireEvent.click(await slot.findByRole("menuitem", { name: "Change default…" }));
-    expect(sessionStorage.getItem("link-rules:example")).toBe(anchor.href);
+    expect(JSON.parse(sessionStorage.getItem("link-rules:example")!).url).toBe(anchor.href);
     expect(slot.inspection.navigateCalls.some(call => call.method === "toPluginPanel")).toBe(true);
   });
   it("replays BB's original click for the one-off BB option", async () => {
@@ -64,13 +64,42 @@ describe("web-link interaction", () => {
   });
 });
 describe("settings", () => {
+  it("turns Change default into a focused example next to the rules", async () => {
+    const menu = await overlay();
+    const anchor = link("https://new.example.com/path?q=1#fragment");
+    fireEvent.contextMenu(anchor);
+    fireEvent.click(await menu.findByRole("menuitem", { name: "Change default…" }));
+    menu.lifecycle.unmount();
+    const slot = renderSlot(app.settingsSections[0], {}, { rpc: { configuration: () => structuredClone(defaultConfiguration) } }); mounted.push(slot);
+    await waitFor(() => expect((slot.getByRole("textbox", { name: "Example URL 1" }) as HTMLInputElement).value).toBe(anchor.href));
+    expect(slot.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Web1", "Files1"]);
+    expect(slot.getByRole("textbox", { name: "URL pattern 1" })).toBeTruthy();
+    expect(document.activeElement).toBe(slot.getByRole("combobox", { name: "Expected outcome 1" }));
+    expect((slot.getByRole("combobox", { name: "Expected outcome 1" }) as HTMLSelectElement).value).toBe("bb");
+    expect(slot.getByRole("button", { name: "Save changes" }).hasAttribute("disabled")).toBe(false);
+    expect(sessionStorage.getItem("link-rules:example")).toBe(null);
+  });
+  it("handles a second request without remounting or losing edits, and avoids duplicates", async () => {
+    const slot = renderSlot(app.settingsSections[0], {}, { rpc: { configuration: () => structuredClone(defaultConfiguration) } }); mounted.push(slot);
+    const narrative = await slot.findByRole("textbox", { name: "General rule 1" });
+    fireEvent.change(narrative, { target: { value: "Keep my unsaved intent" } });
+    fireEvent.click(slot.getByRole("tab", { name: "Files" }));
+    const { requestExample } = await import("./example-request");
+    act(() => requestExample(defaultConfiguration.examples[0].url, "external"));
+    await waitFor(() => expect((slot.getByRole("textbox", { name: "General rule 1" }) as HTMLTextAreaElement).value).toBe("Keep my unsaved intent"));
+    expect(slot.getAllByRole("textbox", { name: /^Example URL/ })).toHaveLength(2);
+    expect(slot.getByRole("tab", { name: "Web" }).getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(slot.getByRole("combobox", { name: "Expected outcome 1" }));
+    act(() => requestExample("https://another.example.com/test", "external"));
+    await waitFor(() => expect((slot.getByRole("textbox", { name: "Example URL 1" }) as HTMLInputElement).value).toBe("https://another.example.com/test"));
+    expect((slot.getByRole("textbox", { name: "General rule 2" }) as HTMLTextAreaElement).value).toBe("Keep my unsaved intent");
+  });
+
   it("edits expected outcomes and narratives, applies the domain rule and saves", async () => {
     let stored: Configuration = structuredClone(defaultConfiguration);
     const save = vi.fn((value: unknown) => { stored = configurationSchema.parse(value); return structuredClone(stored); });
     const slot = renderSlot(app.settingsSections[0], {}, { rpc: { configuration: () => structuredClone(stored), saveConfiguration: save } });
     mounted.push(slot);
-    await slot.findByRole("tab", { name: "Examples" });
-    fireEvent.click(slot.getByRole("tab", { name: "Examples" }));
     const outcome = await slot.findByRole("combobox", { name: "Expected outcome 2" });
     fireEvent.change(outcome, { target: { value: "external" } });
     fireEvent.change(slot.getByRole("textbox", { name: "General rule 2" }), { target: { value: "All GitHub links belong in my main browser." } });
@@ -90,11 +119,10 @@ describe("settings", () => {
     expect(slot.getByRole("alert").textContent).toContain("Invalid URL pattern");
     expect((slot.getByRole("button", { name: "Save changes" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(pattern, { target: { value: "slack\\.com" } });
-    fireEvent.click(slot.getByRole("tab", { name: "Examples" }));
     fireEvent.click(slot.getByRole("button", { name: "Remove example 2" }));
     fireEvent.click(slot.getByRole("button", { name: "Remove example 1" }));
     expect(slot.getByText("Add a few links to show the behavior you want.")).toBeTruthy();
-    fireEvent.click(slot.getByRole("tab", { name: "File links" }));
+    fireEvent.click(slot.getByRole("tab", { name: "Files" }));
     expect(slot.getByRole("combobox", { name: "Default for file links" })).toBeTruthy();
   });
 });

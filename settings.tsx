@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
 import { actionFor, builtInActions, configurationSchema, type Configuration } from "./actions";
 import { applyExample, domainPattern, webActionFor, webActionLabels, webActions, webUrl, type LinkExample, type WebAction, type WebRule } from "./web-rules";
 import type { rpcContract } from "./server";
 import { useConfiguration } from "./use-configuration";
+import { exampleRequestEvent, exampleRequestKey, readExampleRequest } from "./example-request";
 import "./settings.css";
 
 type Draft = Omit<Configuration, "rules"> & { rules: { extensions: string; action: string }[] };
@@ -22,8 +23,11 @@ export function FileLinkSettings() {
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [sample, setSample] = useState(() => sessionStorage.getItem("link-rules:example") ?? "https://modal.enterprise.slack.com/archives/C123");
-  const [tab, setTab] = useState<"web" | "examples" | "files">("web");
+  const [pendingExample, setPendingExample] = useState(readExampleRequest);
+  const [focusedExample, setFocusedExample] = useState<{ url: string; id: string } | null>(null);
+  const examplesRoot = useRef<HTMLDivElement>(null);
+  const [sample, setSample] = useState(() => readExampleRequest()?.url ?? "https://modal.enterprise.slack.com/archives/C123");
+  const [tab, setTab] = useState<"web" | "files">("web");
   const [filename, setFilename] = useState("photo.png");
   const dirty = !!draft && JSON.stringify(toConfig(draft)) !== JSON.stringify(base);
   useEffect(() => {
@@ -35,6 +39,36 @@ export function FileLinkSettings() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
+  useEffect(() => {
+    const receive = () => setPendingExample(readExampleRequest());
+    window.addEventListener(exampleRequestEvent, receive);
+    return () => window.removeEventListener(exampleRequestEvent, receive);
+  }, []);
+  useEffect(() => {
+    if (!draft || !pendingExample) return;
+    const existing = draft.examples.find(example => example.url === pendingExample.url);
+    setTab("web"); setSample(pendingExample.url);
+    if (!existing && draft.examples.length >= 30) {
+      setSaveError("Remove an example to make room for this link (30 maximum).");
+      return;
+    }
+    const example = existing ?? { url: pendingExample.url, action: pendingExample.action ?? webActionFor(config!, pendingExample.url)?.action ?? draft.webDefault, narrative: "" };
+    if (draft.examples[0] !== existing || !existing) {
+      setDraft({ ...draft, examples: [example, ...draft.examples.filter(item => item !== existing)] });
+      setSaved(false);
+    }
+    setFocusedExample({ url: example.url, id: pendingExample.id }); setSaveError(null);
+    if (readExampleRequest()?.id === pendingExample.id) sessionStorage.removeItem(exampleRequestKey);
+    setPendingExample(null);
+  }, [config, draft, pendingExample]);
+  useEffect(() => {
+    if (!focusedExample) return;
+    const card = Array.from(examplesRoot.current?.querySelectorAll<HTMLElement>("[data-example-url]") ?? []).find(element => element.dataset.exampleUrl === focusedExample.url);
+    if (card) {
+      card.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+      card.querySelector<HTMLSelectElement>("select")?.focus({ preventScroll: true });
+    }
+  }, [focusedExample]);
   if (!draft || !config) return <div className="lr-settings"><p role={error ? "alert" : "status"}>{error ?? "Loading rules…"}</p>{error && <button onClick={() => void reload()}>Retry</button>}</div>;
   const parsed = configurationSchema.safeParse(toConfig(draft));
   const checked = parsed.success ? parsed.data : null;
@@ -62,17 +96,18 @@ export function FileLinkSettings() {
   }
   return <div className="lr-settings" data-link-rules>
     <header className="lr-heading"><div><h2>Where links open</h2><p>Set destinations, add exceptions, and check your examples.</p></div></header>
-    <nav className="lr-tabs" role="tablist" aria-label="Link settings sections">{([ ["web", "Web links", draft.webRules.length], ["examples", "Examples", draft.examples.length], ["files", "File links", draft.rules.length] ] as const).map(([id, title, count]) => <button key={id} id={`lr-tab-${id}`} role="tab" aria-label={title} aria-selected={tab === id} aria-controls={`lr-panel-${id}`} onClick={() => setTab(id)} onKeyDown={event => {
-      const tabs = ["web", "examples", "files"] as const;
+    <nav className="lr-tabs" role="tablist" aria-label="Link settings sections">{([ ["web", "Web", draft.webRules.length], ["files", "Files", draft.rules.length] ] as const).map(([id, title, count]) => <button key={id} id={`lr-tab-${id}`} role="tab" aria-label={title} aria-selected={tab === id} aria-controls={`lr-panel-${id}`} onClick={() => setTab(id)} onKeyDown={event => {
+      const tabs = ["web", "files"] as const;
       const index = tabs.indexOf(id);
       if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-      event.preventDefault(); const next = tabs[(index + (event.key === "ArrowRight" ? 1 : 2)) % 3]; setTab(next); document.getElementById(`lr-tab-${next}`)?.focus();
+      event.preventDefault(); const next = tabs[(index + 1) % 2]; setTab(next); document.getElementById(`lr-tab-${next}`)?.focus();
     }} tabIndex={tab === id ? 0 : -1}>{title}<span aria-hidden="true">{count}</span></button>)}</nav>
     <fieldset disabled={busy}>
       <div className="lr-tab-panels">
         <section id="lr-panel-web" role="tabpanel" aria-labelledby="lr-tab-web" hidden={tab !== "web"}>
           <div className="lr-default"><div><h3>Default destination</h3><p>For web links without a matching rule.</p></div><WebActionSelect label="Default for web links" value={draft.webDefault} onChange={webDefault => edit({ ...draft, webDefault })} /></div>
-          <div className="lr-section-heading"><div><h3>URL rules</h3><p className="lr-hint">Exceptions to the default. Checked from top to bottom; first match wins.</p></div><button className="lr-add-rule" disabled={draft.webRules.length >= 50} onClick={() => edit({ ...draft, webRules: [...draft.webRules, { pattern: "", action: draft.webDefault }] })}>+ Add rule</button></div>
+          <div className="lr-web-grid"><section className="lr-web-rules" aria-label="URL rules">
+          <div className="lr-section-heading"><div><h3>URL rules</h3><p className="lr-hint">Exceptions to the default. First match wins.</p></div><button className="lr-add-rule" disabled={draft.webRules.length >= 50} onClick={() => edit({ ...draft, webRules: [...draft.webRules, { pattern: "", action: draft.webDefault }] })}>+ Add rule</button></div>
           <div className="lr-table-heading"><span>URL pattern</span><span>Open in</span></div>
           <div className="lr-list lr-rule-list">
             {draft.webRules.map((rule, index) => <div className="lr-rule" key={index}>
@@ -83,14 +118,14 @@ export function FileLinkSettings() {
           </div>
           <div className="lr-tester"><label htmlFor="lr-sample">Check a link</label><input id="lr-sample" value={sample} spellCheck={false} onChange={event => setSample(event.target.value)} /><p role="status">{sampleResult ? <><strong>{webActionLabels[sampleResult.action]}</strong><span> · {sampleResult.ruleIndex < 0 ? "Default destination" : `Rule ${sampleResult.ruleIndex + 1}`}</span></> : checked ? "Enter an HTTP(S) link" : "Fix the rules to test a link"}</p></div>
         </section>
-        <section id="lr-panel-examples" role="tabpanel" aria-labelledby="lr-tab-examples" hidden={tab !== "examples"}>
-          <div className="lr-section-heading"><h3 id="lr-examples-title">Expected behavior</h3><button className="lr-text-button" disabled={draft.examples.length >= 30} onClick={() => edit({ ...draft, examples: [...draft.examples, { url: webUrl(sample) ?? "https://example.com/", action: sampleResult?.action ?? draft.webDefault, narrative: "" }] })}>+ Example</button></div>
-          <p className="lr-hint">Save sample links and what should happen to them. The status compares each example with your rules.</p>
-          <div className="lr-list lr-example-list">
+        <section className="lr-web-examples" aria-labelledby="lr-examples-title">
+          <div className="lr-section-heading"><h3 id="lr-examples-title">Examples</h3><button className="lr-text-button" disabled={draft.examples.length >= 30} onClick={() => edit({ ...draft, examples: [...draft.examples, { url: webUrl(sample) ?? "https://example.com/", action: sampleResult?.action ?? draft.webDefault, narrative: "" }] })}>+ Example</button></div>
+          <p className="lr-hint">Expected outcomes for sample links. Checked against your rules.</p>
+          <div ref={examplesRoot} className="lr-list lr-example-list">
             {draft.examples.map((example, index) => {
               const actual = checked ? webActionFor(checked, example.url) : null;
               const passes = actual?.action === example.action;
-              return <div className="lr-example" key={index}>
+              return <div className="lr-example" key={index} data-example-url={example.url} data-highlighted={example.url === focusedExample?.url || undefined}>
                 <div className="lr-example-top"><input aria-label={`Example URL ${index + 1}`} value={example.url} spellCheck={false} onChange={event => patchExample(index, { url: event.target.value })} /><WebActionSelect label={`Expected outcome ${index + 1}`} value={example.action} onChange={action => patchExample(index, { action })} /></div>
                 <label className="lr-intent-label">General rule<textarea aria-label={`General rule ${index + 1}`} rows={2} placeholder="What should happen to similar links?" value={example.narrative} maxLength={500} onChange={event => patchExample(index, { narrative: event.target.value })} /></label>
                 <div className="lr-example-bottom"><span className={actual ? passes ? "lr-pass" : "lr-mismatch" : "lr-caption"}>{actual ? passes ? "✓ Matches" : `Expected ${webActionLabels[example.action]}; gets ${webActionLabels[actual.action]}` : "Not checked"}</span>
@@ -102,6 +137,7 @@ export function FileLinkSettings() {
             {!draft.examples.length && <p className="lr-empty">Add a few links to show the behavior you want.</p>}
           </div>
         </section>
+        </div></section>
       </div>
       <section id="lr-panel-files" role="tabpanel" aria-labelledby="lr-tab-files" hidden={tab !== "files"} className="lr-files"><h3>File destinations</h3><p className="lr-hint">Match files by extension. Folders open in the file manager.</p>
         <div className="lr-file-content"><div className="lr-inline"><label>Other files {fileSelect(draft.defaultAction, defaultAction => edit({ ...draft, defaultAction }), "Default for file links")}</label><span className="lr-hint">Folders open in the file manager.</span></div>
