@@ -77,12 +77,12 @@ const config = configurationSchema.parse({ defaultAction: "folder", rules: [{ ex
 assert.equal(actionFor(config, "/tmp/image.PNG"), "preview");
 assert.equal(actionFor(config, "C:\\demo\\code.ts"), toolId);
 assert.equal(actionFor(config, "/tmp/no-extension"), "folder");
-assert.equal(actionFor(config, "/tmp/folder.png", true), "folder");
-assert.equal(actionFor(defaultConfiguration, "/tmp/photo.png"), "external");
+assert.equal(actionFor(config, "/tmp/folder.png", true), "explorer");
+assert.equal(actionFor(defaultConfiguration, "/tmp/photo.png"), "bb");
 configurationSchema.parse(defaultConfiguration);
 for (const path of ["/tmp/code.TS", "C:\\demo\\main.py", "/tmp/package.json", "/tmp/README.md", "/tmp/page.html"]) assert.equal(actionFor(defaultConfiguration, path), "preview");
-for (const path of ["/tmp/video.mp4", "/tmp/report.pdf", "/tmp/archive.zip", "/tmp/unknown.xyz"]) assert.equal(actionFor(defaultConfiguration, path), "external");
-assert.equal(actionFor(defaultConfiguration, "/tmp/code.ts", true), "folder");
+for (const path of ["/tmp/video.mp4", "/tmp/report.pdf", "/tmp/archive.zip", "/tmp/unknown.xyz"]) assert.equal(actionFor(defaultConfiguration, path), "bb");
+assert.equal(actionFor(defaultConfiguration, "/tmp/code.ts", true), "explorer");
 {
   let saved = structuredClone(config);
   const cli = settingsCli(async () => structuredClone(saved), async value => { saved = configurationSchema.parse(value); return saved; });
@@ -126,7 +126,7 @@ for (const invalid of [
   { ...config, tools: [{ ...config.tools[0], icon: "unknown" }] },
 ]) assert.equal(configurationSchema.safeParse(invalid).success, false);
 for (const locale of locales) assert.deepEqual(Object.keys(settingsMessages(locale)).sort(), Object.keys(settingsMessages("en")).sort());
-assert.equal(actionFor(defaultConfiguration, "/tmp/folder.html", true), "folder");
+assert.equal(actionFor(defaultConfiguration, "/tmp/folder.html", true), "explorer");
 const received: unknown[] = [];
 const daemon = createServer(async (request, response) => {
   let body = "";

@@ -151,3 +151,5 @@
 .lr-example-status { display:grid;gap:4px;margin-right:auto;min-width:0; }
 .lr-example-status>span { margin:0;justify-self:start; }
 .lr-result-detail { color:var(--muted-foreground,#737373);font-size:11px; }
+
+.lr-settings input[type="checkbox"] { width:auto;height:auto;margin-right:5px;vertical-align:middle; }

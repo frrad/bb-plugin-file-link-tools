@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { webActions, webRuleSchema, exampleSchema, initialWebRules, initialExamples } from "./web-rules.ts";
+import { fileExampleSchema, viewerActionPattern } from "./file-rules.ts";
 import { fileBasename } from "./links.ts";
 
 export const toolIcons = ["Code", "Terminal", "ExternalLink", "Eye", "FolderOpen", "File", "Image", "Video", "Music", "Type", "Braces", "AppWindow", "Globe", "Database", "Server", "Box", "Archive", "GitBranch", "Wrench", "Settings", "Play", "Zap", "Star", "Search"] as const;
 export type ToolIcon = (typeof toolIcons)[number];
-export const builtInActions = ["folder", "preview", "external"] as const;
+export const builtInActions = ["bb", "preview", "explorer", "folder", "external"] as const;
 export type Action = string;
 
 export function commandArguments(command: string): string[] {
@@ -48,6 +49,7 @@ export const configurationSchema = z.object({
   webDefault: z.enum(webActions).default("bb"),
   webRules: z.array(webRuleSchema).max(50).default(initialWebRules),
   examples: z.array(exampleSchema).max(30).default(initialExamples),
+  fileExamples: z.array(fileExampleSchema).max(30).default([]),
   defaultAction: z.string(),
   rules: z.array(z.object({ extensions: z.array(z.string().regex(/^\.[a-z0-9]+$/u, "Use lowercase extensions such as .png")).min(1).max(50), action: z.string() })).max(50),
   tools: z.array(toolSchema).max(50),
@@ -57,10 +59,14 @@ export const configurationSchema = z.object({
     if (ids.has(tool.id)) ctx.addIssue({ code: "custom", path: ["tools", index, "id"], message: "Duplicate tool" });
     ids.add(tool.id);
   });
-  if (!ids.has(config.defaultAction)) ctx.addIssue({ code: "custom", path: ["defaultAction"], message: "Unknown action" });
+  const known = (action: string) => ids.has(action) || viewerActionPattern.test(action);
+  if (!known(config.defaultAction)) ctx.addIssue({ code: "custom", path: ["defaultAction"], message: "Unknown action" });
+  config.fileExamples.forEach((example, index) => {
+    if (!known(example.action)) ctx.addIssue({ code: "custom", path: ["fileExamples", index, "action"], message: "Unknown action" });
+  });
   const seen = new Set<string>();
   config.rules.forEach((rule, index) => {
-    if (!ids.has(rule.action)) ctx.addIssue({ code: "custom", path: ["rules", index, "action"], message: "Unknown action" });
+    if (!known(rule.action)) ctx.addIssue({ code: "custom", path: ["rules", index, "action"], message: "Unknown action" });
     rule.extensions.forEach(ext => {
       if (seen.has(ext)) ctx.addIssue({ code: "custom", path: ["rules", index, "extensions"], message: `Duplicate extension: ${ext}` });
       seen.add(ext);
@@ -70,7 +76,7 @@ export const configurationSchema = z.object({
 export type Configuration = z.infer<typeof configurationSchema>;
 export const defaultConfiguration: Configuration = {
   webDefault: "bb", webRules: initialWebRules, examples: initialExamples,
-  defaultAction: "external",
+  defaultAction: "bb", fileExamples: [],
   rules: [{ action: "preview", extensions: [
     ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts", ".py", ".go", ".rs", ".java", ".kt", ".kts", ".swift",
     ".c", ".h", ".cpp", ".hpp", ".cc", ".cs", ".rb", ".php", ".sh", ".bash", ".zsh", ".ps1", ".sql", ".html", ".htm",
@@ -81,13 +87,14 @@ export const defaultConfiguration: Configuration = {
 };
 
 export function actionFor(config: Configuration, path: string, directory = false): Action {
-  if (directory) return "folder";
+  if (directory) return "explorer";
   const name = fileBasename(path).toLowerCase();
   const extension = name.slice(name.lastIndexOf("."));
   return config.rules.find(rule => rule.extensions.includes(extension))?.action ?? config.defaultAction;
 }
 export function actionIcon(config: Configuration, action: Action): ToolIcon {
-  if (action === "folder") return "FolderOpen";
+  if (action === "folder" || action === "explorer") return "FolderOpen";
+  if (action === "bb" || viewerActionPattern.test(action)) return "AppWindow";
   if (action === "preview") return "Eye";
   if (action === "external") return "ExternalLink";
   const tool = config.tools.find(tool => tool.id === action);
@@ -101,5 +108,5 @@ export function expandCommand(command: string, path: string, line = 1, column = 
 }
 
 export function fileActionLabels(config: Pick<Configuration, "tools">): Record<string, string> {
-  return { preview: "Preview in BB", external: "Default app", folder: "Show in folder", ...Object.fromEntries(config.tools.map(tool => [tool.id, tool.name || "Unnamed tool"])) };
+  return { bb: "Automatic BB viewer", preview: "Built-in preview", explorer: "File explorer", external: "System application on file host", folder: "System file manager on file host", ...Object.fromEntries(config.tools.map(tool => [tool.id, tool.name || "Unnamed tool"])) };
 }

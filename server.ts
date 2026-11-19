@@ -4,14 +4,15 @@ import { inspectFile, openFolder, filePathSchema } from "./files";
 import { getMessages, locales, type Locale } from "./messages";
 import { configurationSchema, defaultConfiguration } from "./actions";
 import { launchTool } from "./launch-tool";
-import { defaultApplication, openDefaultFile } from "./default-app";
+import { openDefaultFile } from "./default-app";
+import { addFilePanel } from "./file-panels";
 import { settingsCli } from "./cli";
 
 const target = z.object({ path: filePathSchema, threadId: z.string().min(1), locale: z.enum(locales) });
 export const rpcContract = defineRpcContract({
   configuration: { input: z.object({}), output: configurationSchema },
   saveConfiguration: { input: configurationSchema, output: configurationSchema },
-  defaultApplication: { input: target, output: z.object({ name: z.string().nullable(), available: z.boolean().nullable(), hostName: z.string() }) },
+  openFilePanel: { input: target.extend({ action: z.string().regex(/^(preview|explorer|viewer:[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+)$/u), line: z.number().int().positive().optional(), endLine: z.number().int().positive().optional() }), output: z.object({ tabId: z.string() }) },
   openDefault: { input: target, output: z.object({ ok: z.literal(true) }) },
   runTool: {
     input: target.extend({ toolId: z.string().uuid(), line: z.number().int().positive().safe().optional(), column: z.number().int().positive().safe().optional() }),
@@ -52,11 +53,10 @@ export default function plugin(bb: BbPluginApi) {
   bb.rpc.register(rpcContract, {
     configuration: async () => configuration(),
     saveConfiguration,
-    defaultApplication: async ({ path, threadId, locale }) => {
+    openFilePanel: async ({ path, threadId, locale, action, line, endLine }) => {
       const hostId = await requireLocalThread(threadId, locale);
       if (!await inspectFile(path, locale)) throw new Error(getMessages(locale).fileNotFound);
-      const [application, host] = await Promise.all([defaultApplication(path), bb.sdk.hosts.get({ hostId })]);
-      return { ...application, hostName: host.name };
+      return addFilePanel(bb, { path, threadId, hostId, action, line, endLine });
     },
     openDefault: async ({ path, threadId, locale }) => {
       await requireLocalThread(threadId, locale);

@@ -24,14 +24,14 @@ export function settingsCli(read: () => Promise<Configuration>, save: (value: un
       }),
       "settings default": cliCommand({
         summary: "Set the action for files without an extension rule",
-        positionals: [{ name: "action", description: "preview, external, folder, or a saved tool UUID", required: true }],
+        positionals: [{ name: "action", description: "bb, preview, explorer, viewer:<pluginId>:<openerId>, external, folder, or a saved tool UUID", required: true }],
         async run(input) { return write({ ...await read(), defaultAction: input.positionals.action }); },
       }),
       "settings rule set": cliCommand({
         summary: "Set an action for comma-separated extensions, preserving other rules",
         positionals: [
           { name: "extensions", description: "Comma-separated extensions, e.g. .ts,.py", required: true },
-          { name: "action", description: "preview, external, folder, or a saved tool UUID", required: true },
+          { name: "action", description: "bb, preview, explorer, viewer:<pluginId>:<openerId>, external, folder, or a saved tool UUID", required: true },
         ],
         async run(input) {
           const config = await read();
