@@ -135,3 +135,13 @@
 @media(min-width:851px) and (max-height:700px) { .lr-heading>div { display:flex;align-items:baseline;gap:12px; } .lr-heading p { margin:0; }  }
 
 .lr-example-list { display:grid;gap:12px;overflow:visible; }
+/* BB's Settings route wraps plugin sections in narrower core containers.
+   Widen only the ancestors that contain this plugin's settings. */
+.max-w-3xl:has(.lr-settings),
+.max-w-5xl:has(.lr-settings),
+[class~="max-w-[760px]"]:has(.lr-settings) { max-width:1160px; }
+.lr-settings { container:link-rules / inline-size; }
+@container link-rules (max-width:760px) {
+  .lr-web-grid { grid-template-columns:minmax(0,1fr);gap:18px; }
+  .lr-web-examples { padding-left:0;padding-top:16px;border-left:0;border-top:1px solid var(--border,#ddd); }
+}
