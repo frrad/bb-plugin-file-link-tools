@@ -12,9 +12,15 @@ export function LinkMenu({ target, label, dismiss, children }: {
   onDismiss.current = dismiss;
   useEffect(() => {
     const menuRoot = root.current!;
-    const rect = menuRoot.getBoundingClientRect();
-    menuRoot.style.left = `${Math.max(8, Math.min(target.x, window.innerWidth - rect.width - 8))}px`;
-    menuRoot.style.top = `${Math.max(8, Math.min(target.y, window.innerHeight - rect.height - 8))}px`;
+    function position() {
+      const rect = menuRoot.getBoundingClientRect();
+      menuRoot.style.left = `${Math.max(8, Math.min(target.x, window.innerWidth - rect.width - 8))}px`;
+      menuRoot.style.top = `${Math.max(8, Math.min(target.y, window.innerHeight - rect.height - 8))}px`;
+    }
+    position();
+    // Application names arrive asynchronously and may widen the menu.
+    const size = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(position);
+    size?.observe(menuRoot);
     menuRoot.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     function outside(event: PointerEvent) { if (!root.current?.contains(event.target as Node)) onDismiss.current(); }
     function close(event: Event) {
@@ -38,6 +44,7 @@ export function LinkMenu({ target, label, dismiss, children }: {
     window.addEventListener("resize", close);
     window.addEventListener("scroll", close, true);
     return () => {
+      size?.disconnect();
       document.removeEventListener("pointerdown", outside, true); document.removeEventListener("keydown", key, true);
       window.removeEventListener("resize", close); window.removeEventListener("scroll", close, true);
     };

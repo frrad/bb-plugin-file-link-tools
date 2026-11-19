@@ -26,6 +26,16 @@ function FileLinkActions({ threadId }: PluginThreadHeaderActionProps) {
   const verified = useFileLinks(threadId, inspect);
   const [menu, setMenu] = useState<FileMenu | null>(null);
   const bypass = useRef(false);
+  const [application, setApplication] = useState<{ name: string | null; available: boolean | null; hostName: string } | null>(null);
+  useEffect(() => {
+    setApplication(null);
+    if (!menu || menu.directory) return;
+    let disposed = false;
+    void rpc.call("defaultApplication", { path: menu.path, threadId, locale }).then(value => {
+      if (!disposed) setApplication(value);
+    }).catch(() => { if (!disposed) setApplication({ name: null, available: null, hostName: "file host" }); });
+    return () => { disposed = true; };
+  }, [menu, rpc, threadId, locale]);
 
   const run = useCallback(async (target: ParsedFileLink, hostId: string, action: string) => {
     try {
@@ -76,6 +86,12 @@ function FileLinkActions({ threadId }: PluginThreadHeaderActionProps) {
   useEffect(() => { setMenu(null); }, [threadId, enabled]);
   if (!menu || !config) return null;
   const labels = fileActionLabels(config);
+  const applicationLabel = !application ? "Checking application on file host…"
+    : application.available === false ? `No application configured on ${application.hostName}`
+    : application.name ? `${application.name} on ${application.hostName}`
+    : `System application on ${application.hostName} (name unavailable)`;
+  labels.external = applicationLabel;
+  const externalUnavailable = application?.available === false;
   const defaultAction = enabled ? actionFor(config, menu.path, menu.directory) : "bb";
   function originalMenu() {
     if (!menu || !menu.anchor.isConnected || menu.anchor.href !== menu.href) return;
@@ -94,10 +110,10 @@ function FileLinkActions({ threadId }: PluginThreadHeaderActionProps) {
     if (!await experimental_copyToClipboard({ text: value })) toast.error("Could not copy to clipboard");
   }
   return <LinkMenu target={menu} label="File link" dismiss={() => setMenu(null)}>
-    <button role="menuitem" onClick={() => open(defaultAction)}>Default: {defaultAction === "bb" ? "BB file handler" : labels[defaultAction]}</button>
+    <button role="menuitem" disabled={defaultAction === "external" && externalUnavailable} onClick={() => open(defaultAction)}>Default: {defaultAction === "bb" ? "BB file handler" : labels[defaultAction]}</button>
     <hr role="separator" />
     {!menu.directory && <button role="menuitem" onClick={() => open("preview")}>Open with built-in preview</button>}
-    {!menu.directory && <button role="menuitem" onClick={() => open("external")}>Open in default app</button>}
+    {!menu.directory && <button role="menuitem" disabled={externalUnavailable} onClick={() => open("external")}>{!application || externalUnavailable ? applicationLabel : `Open in ${applicationLabel}`}</button>}
     <button role="menuitem" onClick={() => open("folder")}>Show in folder</button>
     {config.tools.map(tool => <button key={tool.id} role="menuitem" onClick={() => open(tool.id)}>Open with {tool.name}</button>)}
     <button role="menuitem" onClick={() => { setMenu(null); originalMenu(); }}>More open options…</button>
