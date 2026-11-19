@@ -1,17 +1,20 @@
-import { useCallback, useEffect } from "react";
-import { definePluginApp, useBbNavigate, useRpc, useSettings, type PluginThreadHeaderActionProps } from "@get-bb/plugin-sdk/app";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { definePluginApp, experimental_copyToClipboard, useBbNavigate, useRpc, useSettings, type PluginThreadHeaderActionProps } from "@get-bb/plugin-sdk/app";
 import { toast } from "sonner";
 import type { rpcContract } from "./server";
-import { parseFileLink } from "./links";
+import { fileBasename, parseFileLink, type ParsedFileLink } from "./links";
 import { getMessages } from "./messages";
 import { useFileLinks } from "./use-file-links";
-import { actionFor } from "./actions";
+import { actionFor, fileActionLabels } from "./actions";
 import { FileLinkSettings } from "./settings";
 import { useConfiguration } from "./use-configuration";
 import { useLocale } from "./use-locale";
 import { WebLinks } from "./web-links";
+import { LinkMenu, type LinkMenuTarget } from "./link-menu";
+import { requestFile } from "./file-request";
+type FileMenu = LinkMenuTarget & ParsedFileLink & { directory: boolean; hostId: string; href: string };
 
-// No hover UI or link decoration: only override a verified file's normal click.
+// Verified file links share click actions and the settings-aware link menu.
 function FileLinkActions({ threadId }: PluginThreadHeaderActionProps) {
   const locale = useLocale();
   const { config } = useConfiguration();
@@ -20,43 +23,90 @@ function FileLinkActions({ threadId }: PluginThreadHeaderActionProps) {
   const { values } = useSettings();
   const enabled = values?.replaceDefaultClick === true;
   const inspect = useCallback((path: string) => rpc.call("inspect", { path, threadId, locale }), [rpc, threadId, locale]);
-  const verified = useFileLinks(threadId, enabled ? inspect : null);
+  const verified = useFileLinks(threadId, inspect);
+  const [menu, setMenu] = useState<FileMenu | null>(null);
+  const bypass = useRef(false);
 
-  useEffect(() => {
-    if (!enabled || !config) return;
-    async function run(target: NonNullable<ReturnType<typeof parseFileLink>>, hostId: string, directory: boolean) {
-      const action = actionFor(config!, target.path, directory);
-      try {
-        if (action === "preview") {
-          if (!navigate.experimental_openFilePreview({ target: { kind: "host", hostId, path: target.path }, location: target.location })) {
-            throw new Error(getMessages(locale).openPreviewFailed);
-          }
-        } else if (action === "external" || action === "folder") {
-          await rpc.call(action === "external" ? "openDefault" : "openFolder", { path: target.path, threadId, locale });
-        } else {
-          const location = target.location;
-          await rpc.call("runTool", { path: target.path, threadId, locale, toolId: action,
-            ...(location ? { line: location.kind === "range" ? location.startLine : location.line,
-              column: location.kind === "line" ? location.column ?? 1 : 1 } : {}),
-          });
+  const run = useCallback(async (target: ParsedFileLink, hostId: string, action: string) => {
+    try {
+      if (action === "preview") {
+        if (!navigate.experimental_openFilePreview({ target: { kind: "host", hostId, path: target.path }, location: target.location })) {
+          throw new Error(getMessages(locale).openPreviewFailed);
         }
-      } catch (cause) { toast.error(cause instanceof Error ? cause.message : String(cause)); }
-    }
-    function click(event: MouseEvent) {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      if (!(event.target instanceof Element)) return;
+      } else if (action === "external" || action === "folder") {
+        await rpc.call(action === "external" ? "openDefault" : "openFolder", { path: target.path, threadId, locale });
+      } else {
+        const location = target.location;
+        await rpc.call("runTool", { path: target.path, threadId, locale, toolId: action,
+          ...(location ? { line: location.kind === "range" ? location.startLine : location.line,
+            column: location.kind === "line" ? location.column ?? 1 : 1 } : {}),
+        });
+      }
+    } catch (cause) { toast.error(cause instanceof Error ? cause.message : String(cause)); }
+  }, [navigate, rpc, threadId, locale]);
+  useEffect(() => {
+    if (!config) return;
+    function targetFor(event: MouseEvent) {
+      if (!(event.target instanceof Element)) return null;
       const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
-      if (!anchor || anchor.closest("[data-timeline-row-id]")?.getAttribute("data-timeline-row-id")?.split(":")[0] !== threadId) return;
+      if (!anchor || anchor.closest("[data-timeline-row-id]")?.getAttribute("data-timeline-row-id")?.split(":")[0] !== threadId) return null;
       const target = parseFileLink(anchor.getAttribute("href"));
       const confirmed = verified.current.get(anchor);
-      if (!target || !confirmed || confirmed.path !== target.path) return;
+      return target && confirmed && confirmed.path === target.path ? { anchor, ...target, hostId: confirmed.hostId, directory: confirmed.directory } : null;
+    }
+    function click(event: MouseEvent) {
+      if (!enabled || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = targetFor(event);
+      if (!target) return;
       event.preventDefault(); event.stopImmediatePropagation();
-      void run(target, confirmed.hostId, confirmed.directory);
+      void run(target, target.hostId, actionFor(config!, target.path, target.directory));
+    }
+    function context(event: MouseEvent) {
+      if (bypass.current || event.defaultPrevented || event.shiftKey) return;
+      const target = targetFor(event);
+      if (!target) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      const rect = target.anchor.getBoundingClientRect();
+      setMenu({ ...target, href: target.anchor.href, x: event.clientX || rect.left, y: event.clientY || rect.bottom });
     }
     document.addEventListener("click", click, true);
-    return () => document.removeEventListener("click", click, true);
-  }, [enabled, config, navigate, rpc, threadId, locale, verified]);
-  return null;
+    document.addEventListener("contextmenu", context, true);
+    return () => { document.removeEventListener("click", click, true); document.removeEventListener("contextmenu", context, true); };
+  }, [enabled, config, run, threadId, verified]);
+  useEffect(() => { setMenu(null); }, [threadId, enabled]);
+  if (!menu || !config) return null;
+  const labels = fileActionLabels(config);
+  const defaultAction = enabled ? actionFor(config, menu.path, menu.directory) : "bb";
+  function originalMenu() {
+    if (!menu || !menu.anchor.isConnected || menu.anchor.href !== menu.href) return;
+    bypass.current = true;
+    try { menu.anchor.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2, clientX: menu.x, clientY: menu.y })); }
+    finally { bypass.current = false; }
+  }
+  function open(action: string) {
+    setMenu(null);
+    if (action === "bb") {
+      if (menu!.anchor.isConnected && menu!.anchor.href === menu!.href) menu!.anchor.click();
+    } else void run(menu!, menu!.hostId, action);
+  }
+  async function copy(value: string) {
+    setMenu(null);
+    if (!await experimental_copyToClipboard({ text: value })) toast.error("Could not copy to clipboard");
+  }
+  return <LinkMenu target={menu} label="File link" dismiss={() => setMenu(null)}>
+    <button role="menuitem" onClick={() => open(defaultAction)}>Default: {defaultAction === "bb" ? "BB file handler" : labels[defaultAction]}</button>
+    <hr role="separator" />
+    {!menu.directory && <button role="menuitem" onClick={() => open("preview")}>Open with built-in preview</button>}
+    {!menu.directory && <button role="menuitem" onClick={() => open("external")}>Open in default app</button>}
+    <button role="menuitem" onClick={() => open("folder")}>Show in folder</button>
+    {config.tools.map(tool => <button key={tool.id} role="menuitem" onClick={() => open(tool.id)}>Open with {tool.name}</button>)}
+    <button role="menuitem" onClick={() => { setMenu(null); originalMenu(); }}>More open options…</button>
+    <hr role="separator" />
+    <button role="menuitem" onClick={() => void copy(menu.path)}>Copy file path</button>
+    <button role="menuitem" onClick={() => void copy(fileBasename(menu.path))}>Copy file name</button>
+    <hr role="separator" />
+    <button role="menuitem" onClick={() => { requestFile(menu.path); setMenu(null); navigate.toPluginPanel("settings"); }}>Change default…</button>
+  </LinkMenu>;
 }
 
 export default definePluginApp((app) => {

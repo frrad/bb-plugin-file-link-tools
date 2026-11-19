@@ -17,6 +17,8 @@ Click **Save changes** to apply edits. Empty web rule and example lists are supp
 
 Right-click a web link for its current default, one-off opening options, Copy link, Copy, Select all, and **Change default…**, which opens Web settings and adds that URL as a focused, editable example next to the rules. Save changes persists the example. Shift-right-click bypasses the plugin's menu. Modified clicks retain BB's behavior.
 
+Right-click a verified file link for its current default, one-off preview/default-app/folder/tool actions, and **Change default…**. This opens Files settings and focuses the matching rule. A new extension gets an editable draft rule; Save changes applies it. Existing unsaved edits are preserved. **More open options…** opens BB’s original menu, including installed viewers and terminal options. Shift-right-click opens that menu directly. Unverified files retain BB’s menu.
+
 **BB browser** explicitly opens inside the desktop app and enables BB’s local “Open links in app browser” preference when needed. On web-only clients, the main browser is the fallback; the desktop-only menu option is disabled. **Main browser** opens on that same viewing device, even when the server or thread runs remotely. Slack uses the original HTTPS link, allowing your browser to hand off to Slack; direct `slack://` conversion is not performed.
 
 ## Install and develop

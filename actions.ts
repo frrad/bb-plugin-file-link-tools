@@ -99,3 +99,7 @@ export function expandCommand(command: string, path: string, line = 1, column = 
   const values = { path, line: String(line), column: String(column) };
   return commandArguments(command).map(arg => arg.replace(/\{(path|line|column)\}/gu, (_, key: keyof typeof values) => values[key]));
 }
+
+export function fileActionLabels(config: Pick<Configuration, "tools">): Record<string, string> {
+  return { preview: "Preview in BB", external: "Default app", folder: "Show in folder", ...Object.fromEntries(config.tools.map(tool => [tool.id, tool.name || "Unnamed tool"])) };
+}

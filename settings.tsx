@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRpc } from "@get-bb/plugin-sdk/app";
-import { actionFor, builtInActions, configurationSchema, type Configuration } from "./actions";
+import { actionFor, fileActionLabels, builtInActions, configurationSchema, type Configuration } from "./actions";
 import { applyExample, domainPattern, webActionFor, webActionLabels, webActions, webUrl, type LinkExample, type WebAction, type WebRule } from "./web-rules";
 import type { rpcContract } from "./server";
 import { useConfiguration } from "./use-configuration";
 import { exampleRequestEvent, exampleRequestKey, readExampleRequest } from "./example-request";
+import { fileExtension, fileRequestEvent, fileRequestKey, readFileRequest } from "./file-request";
 import "./settings.css";
 
 type Draft = Omit<Configuration, "rules"> & { rules: { extensions: string; action: string }[] };
@@ -28,6 +29,9 @@ export function FileLinkSettings() {
   const examplesRoot = useRef<HTMLDivElement>(null);
   const [sample, setSample] = useState(() => readExampleRequest()?.url ?? "https://modal.enterprise.slack.com/archives/C123");
   const [tab, setTab] = useState<"web" | "files">("web");
+  const [pendingFile, setPendingFile] = useState(readFileRequest);
+  const [focusedFile, setFocusedFile] = useState<{ index: number; id: string } | null>(null);
+  const filesRoot = useRef<HTMLElement>(null);
   const [filename, setFilename] = useState("photo.png");
   const dirty = !!draft && JSON.stringify(toConfig(draft)) !== JSON.stringify(base);
   useEffect(() => {
@@ -69,11 +73,36 @@ export function FileLinkSettings() {
       card.querySelector<HTMLSelectElement>("select")?.focus({ preventScroll: true });
     }
   }, [focusedExample]);
+  useEffect(() => {
+    const receive = () => setPendingFile(readFileRequest());
+    window.addEventListener(fileRequestEvent, receive);
+    return () => window.removeEventListener(fileRequestEvent, receive);
+  }, []);
+  useEffect(() => {
+    if (!draft || !pendingFile) return;
+    setTab("files"); setFilename(pendingFile.path);
+    const extension = fileExtension(pendingFile.path);
+    let index = draft.rules.findIndex(rule => rule.extensions.split(",").some(ext => ext.trim().toLowerCase() === extension));
+    if (index < 0 && /^\.[a-z0-9]+$/u.test(extension) && draft.rules.length < 50) {
+      index = draft.rules.length;
+      setDraft({ ...draft, rules: [...draft.rules, { extensions: extension, action: draft.defaultAction }] });
+      setSaved(false);
+    }
+    setFocusedFile({ index, id: pendingFile.id });
+    if (readFileRequest()?.id === pendingFile.id) sessionStorage.removeItem(fileRequestKey);
+    setPendingFile(null);
+  }, [draft, pendingFile]);
+  useEffect(() => {
+    if (!focusedFile) return;
+    const label = focusedFile.index < 0 ? "Default for file links" : `File action ${focusedFile.index + 1}`;
+    const control = filesRoot.current?.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`);
+    control?.scrollIntoView?.({ block: "nearest" }); control?.focus({ preventScroll: true });
+  }, [focusedFile]);
   if (!draft || !config) return <div className="lr-settings"><p role={error ? "alert" : "status"}>{error ?? "Loading rules…"}</p>{error && <button onClick={() => void reload()}>Retry</button>}</div>;
   const parsed = configurationSchema.safeParse(toConfig(draft));
   const checked = parsed.success ? parsed.data : null;
   const sampleResult = checked ? webActionFor(checked, sample) : null;
-  const fileLabels: Record<string, string> = { preview: "Preview in BB", external: "Default app", folder: "Show in folder", ...Object.fromEntries(draft.tools.map(tool => [tool.id, tool.name || "Unnamed tool"])) };
+  const fileLabels = fileActionLabels(draft);
   function edit(next: Draft) { setDraft(next); setSaved(false); setSaveError(null); }
   function patchRule(index: number, patch: Partial<WebRule>) { edit({ ...draft!, webRules: draft!.webRules.map((rule, i) => i === index ? { ...rule, ...patch } : rule) }); }
   function patchExample(index: number, patch: Partial<LinkExample>) { edit({ ...draft!, examples: draft!.examples.map((example, i) => i === index ? { ...example, ...patch } : example) }); }
@@ -139,7 +168,7 @@ export function FileLinkSettings() {
         </section>
         </div></section>
       </div>
-      <section id="lr-panel-files" role="tabpanel" aria-labelledby="lr-tab-files" hidden={tab !== "files"} className="lr-files"><h3>File destinations</h3><p className="lr-hint">Match files by extension. Folders open in the file manager.</p>
+      <section ref={filesRoot} id="lr-panel-files" role="tabpanel" aria-labelledby="lr-tab-files" hidden={tab !== "files"} className="lr-files"><h3>File destinations</h3><p className="lr-hint">Match files by extension. Folders open in the file manager.</p>
         <div className="lr-file-content"><div className="lr-inline"><label>Other files {fileSelect(draft.defaultAction, defaultAction => edit({ ...draft, defaultAction }), "Default for file links")}</label><span className="lr-hint">Folders open in the file manager.</span></div>
           {draft.rules.map((rule, index) => <div className="lr-file-rule" key={index}><input aria-label={`Extensions ${index + 1}`} value={rule.extensions} onChange={event => edit({ ...draft, rules: draft.rules.map((r, i) => i === index ? { ...r, extensions: event.target.value } : r) })} />{fileSelect(rule.action, action => edit({ ...draft, rules: draft.rules.map((r, i) => i === index ? { ...r, action } : r) }), `File action ${index + 1}`)}<button aria-label={`Remove file rule ${index + 1}`} onClick={() => edit({ ...draft, rules: draft.rules.filter((_, i) => i !== index) })}>×</button></div>)}
           <button className="lr-text-button" disabled={draft.rules.length >= 50} onClick={() => edit({ ...draft, rules: [...draft.rules, { extensions: "", action: draft.defaultAction }] })}>+ File rule</button>
